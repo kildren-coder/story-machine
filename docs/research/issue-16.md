@@ -128,7 +128,7 @@
 
 **崩溃一致性——插件里有一个真实可复现的坑**（对 #8 直接有用的反面教材）：
 
-- 在 `analyzeCurrentNote` 里，抽取合并（改内存 → `markDirty` → 防抖 1s 后才落盘）之后，**立刻同步落盘 hash**：`await saveHashes(...)`（`analyze.ts:110-111`）。也就是说 **hash 先持久化，图谱改动还压在 1 秒防抖里**。
+- 在 `analyzeCurrentNote` 里，抽取合并（改内存 → `markDirty` → 防抖 1s 后才落盘）之后，**立刻同步落盘 hash**：`await saveHashes(...)`（`analyze.ts:110-112`）。也就是说 **hash 先持久化，图谱改动还压在 1 秒防抖里**。
 - 若这 1 秒窗口内进程崩溃/被杀：**hash 说"这篇已分析"，但它贡献的图谱节点丢了**。下次分析 `hasNoteChanged` 看 hash 相同直接跳过（`hashes.ts:46-49` + `analyze.ts:223`）→ **这篇内容永久不再进图谱**，除非手动 remove/clear 重来。
 - 更隐蔽的一层：`saveHashes` 和 `cache.flush()` 是**两条独立的"读-改-写整个 `data.json`"路径**。`flush()` 先 `await loadData()` 拿快照，改自己那几段再 `saveData()`（`cache.ts:807-835`）——如果这中间另一条 `saveHashes` 完成了写入，`flush()` 会用旧快照把它覆盖掉。进程内也不安全。
 
