@@ -1,4 +1,4 @@
-# setup-5070-pc.ps1 — 5070 主机（转写 PC）一次性初始化
+﻿# setup-5070-pc.ps1 — 5070 主机（转写 PC）一次性初始化
 # 用途：启用 OpenSSH 服务端 + 授权笔记本密钥 + 安装 Tailscale
 # 用法：在 PC 上以【管理员身份】打开 PowerShell，执行：
 #   irm https://raw.githubusercontent.com/kildren-coder/story-machine/main/scripts/setup-5070-pc.ps1 -OutFile setup-5070-pc.ps1
