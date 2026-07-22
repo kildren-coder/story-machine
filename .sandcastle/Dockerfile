@@ -19,7 +19,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN npm install -g @anthropic-ai/claude-code
 
 # Claude Code refuses to run with permissions bypassed as root.
-RUN useradd -m agent
+# UID 必须钉在 1000:sandcastle 在 Windows 宿主上拿不到 uid(process.getuid
+# 不存在),固定以 --user 1000:1000 起容器;而 node:22-slim 预置的 `node` 用户
+# 已占 1000,裸 useradd 会把 agent 排到 1001,/home/agent 对运行时 UID 不可写,
+# 沙箱 git config 第一步就 Permission denied。删掉 node、显式接管 1000。
+RUN userdel -r node && useradd -m -u 1000 agent
 USER agent
 WORKDIR /home/agent
 
