@@ -1,0 +1,18 @@
+# 行尾统一:仓库内一律 LF,且 checkout 时各平台都强制 LF(eol=lf 覆盖 core.autocrlf)。
+#
+# 为什么需要:开发宿主是 Windows(core.autocrlf=true),没有这条时工作树会被
+# checkout 成 CRLF。AFK 用 sandcastle 的 worktree 模式,把宿主上 checkout 出来的
+# worktree bind-mount 进 Linux 沙箱;容器里的 git(autocrlf=false)看到 CRLF 工作树
+# 对 LF blob,整个仓库都显示"被修改过",AFK agent 每个 PR 都要烧一批请求去区分
+# 真实改动和换行噪声(实现一遍、评审再一遍)。强制 LF 后宿主与容器工作树一致,
+# 这笔税永久消失。仓库内容本就是 LF(无 CRLF 烤进 blob),此文件不改动历史内容,
+# 只固定今后的 checkout 行为。
+* text=auto eol=lf
+
+# 防御性:明确的二进制不做行尾转换(当前仓库暂无这些类型,先声明防将来误伤)。
+*.png binary
+*.jpg binary
+*.gif binary
+*.gz binary
+*.zip binary
+*.pem -text

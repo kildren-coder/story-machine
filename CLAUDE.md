@@ -16,6 +16,10 @@ Five canonical labels (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-f
 
 Single-context: `CONTEXT.md` + `docs/adr/` at repo root. See `docs/agents/domain.md` for reading rules.
 
+### AFK (sandcastle)
+
+`wayfinder:research` 票可由本地 Docker 沙箱夜跑消化（调研 + 评审双 agent，产出带摘要的 PR，不自动关票）。配置在 `.sandcastle/`，用法与额度纪律见 `docs/agents/afk-sandcastle.md`。与 agent-alert 共享额度池：同一晚只跑一个项目的 `--loop`。
+
 ---
 
 ## Project Summary
