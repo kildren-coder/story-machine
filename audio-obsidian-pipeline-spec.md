@@ -38,7 +38,7 @@
 
 ### 阶段 0：音频转写（在 PC 上执行，经桥接触发）
 
-- 工具：`faster-whisper`（或 `whisper.cpp`），模型用 `large-v3`。配置已在 #11 照真机实测固化：`float16` / `batch_size=16` / VAD 开 / `word_timestamps=True` / `language="zh"`（实测 43 倍实时）。
+- 工具：`faster-whisper`（或 `whisper.cpp`），模型用 `large-v3`。配置已在 #11 照真机实测固化：`float16` / `batch_size=16` / VAD 开 / `word_timestamps=True` / `language="zh"`（实测 43 倍实时）。#24 收尾实测补证：`zh` 强制与 auto 检测全篇输出逐字节一致，英文短语在 `zh` 下完整存活、切换处词时间戳可靠，`multilingual` 无增益不启用；VAD 关闭在音乐段大规模幻觉（且批处理模式架构上必须 VAD）——`language="zh"` + VAD 开是终局配置，不再复议。
 - RTX 5070 是 Blackwell 架构，需要较新的 CUDA（12.8+）及对应 PyTorch/CTranslate2 构建版本，环境搭建报错时优先排查这一点。
 - **说话人分离子步**（#11/#15 拍板）：转写后同机顺序跑 3D-Speaker（CN-EN CAM++），纯 CPU、独立 venv、不开重叠检测；K 默认自动估计上限 4，CLI 可 `--speakers N` 锁死；贴合脚本用词时间戳在说话人切换点拆段后挂 `speaker` 标签。禁用 `pyannote.audio` 4.x（显存尖峰 bug）。
 - 输出（#11 拍板）：**JSON 正本**——段级 `{start, end, speaker, text}`，浮点秒，匿名 `SPEAKER_XX`，永久不可变；`EP{n}.txt` 为派生渲染 `[HH:MM:SS] SPEAKER_00: ……`。中英混杂内容保留原文语言，不强制音译。匿名→身份映射每集一次人工点名，落 `EP{n}.meta.json`，转写后、提取前填（声纹自动化 → #27）。
