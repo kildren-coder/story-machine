@@ -109,7 +109,7 @@
 | DeepSeek-R1 对 1,360 条敏感话题约 **85%** 拒答，答复带「过度民族主义腔调」 | PromptFoo 测评 | [TechCrunch 2025-01-29](https://techcrunch.com/2025/01/29/deepseeks-ai-avoids-answering-85-of-prompts-on-sensitive-topics-related-to-china) |
 | 问「1989 天安门」→「Sorry, that's beyond my current scope.」 | 记者实测 | [CBC News](https://www.cbc.ca/news/business/deepseek-chatbot-chinese-censorship-1.7443419) |
 | 更新版 R1「是迄今对批评中国政府最审查的 DeepSeek 模型」 | 测评 | [TechCrunch 2025-05-29](https://techcrunch.com/2025/05/29/deepseeks-updated-r1-ai-model-is-more-censored-test-finds) |
-| 阿里 Qwen 被问「1989 年 6 月 3 日天安门」直接报错；答「台湾不是国家，是中国不可分割的一部分」 | 记者实测 | [The Register 2025-11-18](https://www.theregister.com/software/2025/11/18/alibabas-new-ai-broke-when-we-asked-about-tiananmen-square/) |
+| 阿里 Qwen 被问「1989 年 6 月 3 日天安门」直接报错；答「台湾不是国家，是中国不可分割的一部分」 | 记者实测 | [The Register 2025-11-18](https://www.theregister.com/2025/11/18/alibaba_qwen_bot/) |
 | DeepSeek/Qwen/Kimi 的内容管控「远超中国国内政治敏感范围」，英文语境也给中国正面导向 | 综述 | [China Media Project 2026-02-09](https://chinamediaproject.org/2026/02/09/tokens-of-ai-bias/) |
 
 学术侧对审查机制有系统刻画：R1dacted（[arXiv:2505.12625](https://arxiv.org/html/2505.12625v1)）、DeepSeek 信息压制审计（[ScienceDirect S0020025525008357](https://www.sciencedirect.com/science/article/abs/pii/S0020025525008357)，对比 646 条敏感话题，发现敏感内容常出现在模型内部推理但在最终输出中被删/改写）。
