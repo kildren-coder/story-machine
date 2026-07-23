@@ -36,10 +36,14 @@ if ($target -match '[?&]p=(\d+)') {
 
 Write-Host "下载目标: $clean" -ForegroundColor Cyan
 
-# ---- 2. 让 PC 执行 yt-dlp（只抓音频流）----
-ssh pc-5070 "C:\asr\venv\Scripts\yt-dlp.exe -f ba -N 4 $extra -o 'E:\asr\audio\%(title)s [%(id)s].%(ext)s' '$clean'"
+# ---- 2. cookies：PC 上若有导出的 B 站 cookies 则自动带上（会员内容/风控兜底）----
+$ck = ssh pc-5070 "if (Test-Path 'E:\asr\bili-cookies.txt') { Write-Output 1 }"
+$ckFlag = if ("$ck".Trim() -eq '1') { '--cookies E:\asr\bili-cookies.txt' } else { '' }
+
+# ---- 3. 让 PC 执行 yt-dlp（只抓音频流）----
+ssh pc-5070 "C:\asr\venv\Scripts\yt-dlp.exe -f ba -N 4 $extra $ckFlag -o 'E:\asr\audio\%(title)s [%(id)s].%(ext)s' '$clean'"
 if ($LASTEXITCODE -ne 0) { throw "yt-dlp 下载失败（exit $LASTEXITCODE）" }
 
-# ---- 3. 显示结果 ----
+# ---- 4. 显示结果 ----
 Write-Host "`nE:\asr\audio\ 最新文件：" -ForegroundColor Green
 ssh pc-5070 "Get-ChildItem E:\asr\audio -File | Sort-Object LastWriteTime -Descending | Select-Object -First 5 @{n='MB';e={[math]::Round(`$_.Length/1MB,1)}}, Name | Format-Table -AutoSize"
