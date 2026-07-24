@@ -73,3 +73,5 @@ Entity notes carry frontmatter (`type`, `aliases`, `tags`) and link all related 
 - Will Pro subscription suffice, or upgrade to Max 5x/20x after two weeks of real usage?
 
 See `audio-obsidian-pipeline-spec.md` for full specification.
+
+See `docs/vision.md` for the four downstream visions (求真引擎 / 资产分析框架 / 故事素材库 / 信源信用档案) and which base cheap-insurance fields each one depends on. Vision implementations are out of MVP scope; ideas accumulate in the `vision`-labeled issues.
