@@ -78,7 +78,7 @@
   - **反面风险（事实+推断）**：Hugo 用 `-D/--buildDrafts` 一个标志**一次性包含所有草稿**（<https://gohugo.io/commands/hugo/>）——这是「批量误触发」的典型：单个开关放行全部。story-machine 的消费命令**不应有「放行全部 `_review/`」的批量模式**当默认路径。
 
 - **Decap CMS（事实）**：进阶到发布是**显式动作**——「Approve and publish」= 合并 PR + 删分支；且整个 editorial workflow 要显式开 `publish_mode: editorial_workflow`（默认 `simple` 是直接提交主干）。来源：<https://decapcms.org/docs/editorial-workflows/>、<https://decapcms.org/docs/configuration-options/>。状态字符串为 `draft` / `pending_review` / `pending_publish`（源码 `publishModes.ts`），标签形如 `decap-cms/draft`（`APIUtils.ts`，`CMS_BRANCH_PREFIX='cms'`）。
-  - **坑（事实）**：Decap 把状态存在**文件外**（分支 + PR 标签），手工乱改标签会污染状态——issue [#6140](https://github.com/decaporg/decap-cms/issues/6140) 即手改 `netlify-cms/pending_review` 标签导致状态错乱。**推断**：文件外的可变状态易与内容漂移、且脆于手改。story-machine 若把 `reviewed` 放 frontmatter（文件内、随内容走），天然免疫这类漂移；而把「权威闸门」放在 CLic 命令而非 frontmatter 本身，又避免了「单字段被误设即推进」。
+  - **坑（事实）**：Decap 把状态存在**文件外**（分支 + PR 标签），手工乱改标签会污染状态——issue [#6140](https://github.com/decaporg/decap-cms/issues/6140) 即手改 `netlify-cms/pending_review` 标签导致状态错乱。**推断**：文件外的可变状态易与内容漂移、且脆于手改。story-machine 若把 `reviewed` 放 frontmatter（文件内、随内容走），天然免疫这类漂移；而把「权威闸门」放在 CLI 命令而非 frontmatter 本身，又避免了「单字段被误设即推进」。
   - **推断**：Decap 没有硬约束强制 `pending_review` 必须先于 publish（有合并权者可跳过），安全是流程性的、非强制的。这印证：**表示（三态标签）解决不了误触发，把关的是那一次显式点击。**
 
 - **Jekyll（事实）**：发布 = 把文件从 `_drafts/` **移进 `_posts/` 并给文件名补日期**（两步刻意动作），或用 `published: false` 单字段。来源：<https://jekyllrb.com/docs/posts/>、<https://jekyllrb.com/docs/front-matter/>。**推断**：`_drafts→_posts` 的「移动 + 改名」两步，误触发抵抗力比翻一个 `published` 字段高，但代价是两处改动——这正是「目录/文件名」类机制抵抗力高的来源，也预示了它们的副作用（§3）。
