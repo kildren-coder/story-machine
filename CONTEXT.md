@@ -1,77 +1,64 @@
-# Story Machine — Project Context
+# Story Machine — 项目上下文
 
-## Overview
+> 简版。完整规格见 **`SPEC.md`**（唯一可信需求来源）。本文是入口，两者冲突以 SPEC.md 为准。
 
-An automated audio-to-Obsidian knowledge graph workflow for processing long-form political/economics content (typically ~3 hours per episode). The system bridges local speech recognition (faster-whisper on a dedicated RTX 5070 PC) with AI-powered content extraction and knowledge synthesis.
+## 是什么
 
-**Two core needs:**
-1. **Accurate transcription** — faithful to source audio, no hallucination
-2. **Structured knowledge graph** — continuous accumulation of interconnected entities (people, events, places, concepts, periods) in Obsidian, not scattered notes
+把 3 小时长的政经类直播音频，变成**可查、可比对、能回到原话**的结构化素材，让人在此之上做吸收和综合。
 
-## Key Constraints & Decisions
+## 两条目的（判断「要不要做」的唯一标准）
 
-### Architecture
-- **Dual-machine setup**: Laptop (Claude Code + Obsidian) ↔ Room PC (RTX 5070, faster-whisper via Tailscale+SSH)
-- **Map-Reduce processing**: Long transcripts split into 20–30min chunks before extraction (Gemini Flash → draft → user review → Claude Code → Obsidian)
-- **Manual review gate**: Stage 3 (user validation in `_review/` before facts enter the knowledge graph) is non-negotiable
+> **(A) 快速了解并吸收一集内容**
+> **(B) 学会主播的分析框架，尤其是他们的信息源**
 
-### Cost Optimization
-| Stage | Tool | Cost |
-|-------|------|------|
-| ASR | faster-whisper (local) | Free (electricity) |
-| Draft extraction | Gemini Flash | Free tier |
-| Entity merging & fact-checking | Claude Code | Subscription |
-| Personal understanding | NotebookLM | Free tier (parallel, not integrated) |
+两个都不服务，就不做。
 
-- **Hotwords mechanism**: ASR quality improves over time via persistent `hotwords.json`, seeded from episode show notes
-- **Fact-check budget**: Verify only `history` and `claim` assertions, skip `opinion`. Limit to 10–20 checks per episode to control costs
+## 核心形态
 
-### Processing Pipeline
-**Stage 0** → Transcription (PC, triggered remotely)  
-**Stage 1** → Chunking (20–30min with 1–2min overlap)  
-**Stage 2** → Draft extraction (Gemini Flash)  
-**Stage 3** → Manual review (`_review/` staging area)  
-**Stage 4** → Entity merge, fact-check, note generation (Claude Code)  
-**Stage 5** → Obsidian storage with full [[wikilinks]]
+- **产物是一张断言表**，不是自动生成的知识图谱。每条断言是带行内字段的 list item，落在 EP 笔记里。
+- **总库是一条查询**，不是一个文件。跨集比对靠 Dataview 查询（按实体、按事件时间、按主题）。
+- **人是唯一的下游**。软件负责摆碎片，综合与判断归人。脉络笔记永不自动生成。
 
-### Obsidian Vault Structure
+## 流程
+
 ```
-Vault/
-├── 10-Episodes/       MOCs (maps of content) per episode
-├── 20-People/         Person entities
-├── 21-Events/         Historical/news events
-├── 22-Places/         Countries, regions, places
-├── 23-Concepts/       Concepts, schools of thought
-├── 24-Periods/        Historical periods
-├── _review/           User review staging (excluded from graph)
-└── _index/entities.json (program-managed, not human-edited)
+0  音频 → 逐字稿 JSON（PC/5070, faster-whisper）→ 修复 pass
+1  分块（20–30 min）
+2  抽取 → 断言表初稿（三闸门 + ⛔ 可疑标注）
+3  人工审核 ★ 唯一花时间的地方
+4  ├─ 断言行落进 EP 笔记
+   └─ 断言表 + 逐字稿 → 精简材料（按主题分段，压到 1/10）
+5  人：读材料、查总库、写脉络笔记
 ```
 
-Entity notes carry frontmatter (`type`, `aliases`, `tags`) and link all related notes via `[[wikilinks]]`. Obsidian Graph View auto-renders the network.
+按需（人触发，非流程）：对特定行溯源查证 / 每周过一遍待检验预测。
 
-## Non-Negotiables
+## 断言的 `type`（五类，单值）
 
-1. **ASR ≠ summarization**: Transcription is listen-only, no LLM smoothing or hallucination
-2. **Extraction ≠ synthesis**: Prompts must forbid adding model background knowledge; extract only what's in the transcript
-3. **Human review is a QA gate**: Drafts never bypass `_review/` staging; user confirmation required before facts enter the graph
-4. **One name per entity**: `aliases` field + `_index/entities.json` prevent duplicate notes — essential for auto-linking
-5. **Facts vs. opinions**: Only verify `history`/`claim` assertions; `opinion` entries are filed as-is, unchecked
+`fact` / `causal` / `prediction` / `judgment` / `channel`
+另有正交的 `情态` 轴：`确定` / `推测` / `传闻`（专治「应该是」被固化成确定断言）。
 
-## Development Priorities (rough order)
-1. Laptop ↔ PC bridging (Tailscale+SSH) + remote transcription CLI wrapper
-2. Chunking + Gemini Flash draft extraction (single chunk → batch)
-3. Obsidian vault scaffold + `_review/` read/write
-4. Entity index (`entities.json`) + deduplication logic
-5. Claude Code merge, fact-check, note generation
-6. Hotwords refinement
-7. Parameter tuning (chunk duration, fact-check limits, etc.)
+## 红线（不可协商）
 
-## Open Questions
-- Specific defaults for chunk overlap, fact-check limit per episode?
-- How to signal "review complete" from Obsidian to next stage (filename, frontmatter, CLI flag)?
-- Batch-queue mode for auto-processing 1–2 episodes/day, or always manual trigger?
-- Will Pro subscription suffice, or upgrade to Max 5x/20x after two weeks of real usage?
+1. ASR 只听写，不总结不脑补
+2. 抽取不得脑补，`source_quote` 是机械载体
+3. 精简材料只删只排，**不增不综合**
+4. **限定词与不确定性标记必须原样保留**
+5. 人工审核是质量闸门；且**只审提取产物，永不要求通读逐字稿**
+6. 综合归人——脉络笔记永不自动生成
+7. 主题词表的增长权在人
+8. 不许猜年份
+9. 同一实体同一名字；模糊命中永不自动合并
+10. 每个派生文件必须带 provenance
 
-See `audio-obsidian-pipeline-spec.md` for full specification.
+## 环境
 
-See `docs/vision.md` for the four downstream visions (求真引擎 / 资产分析框架 / 故事素材库 / 信源信用档案) and which base cheap-insurance fields each one depends on. Vision implementations are out of MVP scope; ideas accumulate in the `vision`-labeled issues.
+双机：笔记本（Claude Code + Obsidian）↔ 房间 PC（RTX 5070，faster-whisper，经 Tailscale+SSH）。
+全流程 LLM 走 Claude Code 订阅额度（#14 实测：Gemini Flash 在关系/论断抽取上不达标，已废弃）。
+
+## 延伸阅读
+
+- `SPEC.md` — 完整规格：流程、数据模型、字段表、红线、开发优先级
+- `docs/vision.md` — 四愿景的历史落档（**已按 SPEC §1.4 降级/移出**，不再是路线图）
+- `prompts/` — 各阶段 prompt（带版本）
+- `docs/research/` — 历次调研报告

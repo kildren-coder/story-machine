@@ -14,22 +14,24 @@
    - Includes context, decision, and consequences
    - When a design choice seems unclear, check the corresponding ADR
 
-3. **audio-obsidian-pipeline-spec.md** is a detailed requirements document
-   - Supplements CONTEXT.md with full stage-by-stage walkthroughs
-   - Referenced for implementation details (e.g., exact chunk overlap, entity note template)
+3. **SPEC.md** is the authoritative requirements document
+   - CONTEXT.md is the short entry point; SPEC.md is the full spec. **On conflict, SPEC.md wins.**
+   - Covers stage-by-stage walkthroughs, the claim data model (§5), red lines (§8), and dev priorities (§10)
+   - Replaced `audio-obsidian-pipeline-spec.md` on 2026-07-27; the old file is in git history only
 
 ## When Consuming
 
-- **Writing code?** Reference CONTEXT.md constraints (non-negotiables) + the relevant ADR
-- **Clarifying scope?** Read CONTEXT.md "Non-Negotiables" and "Development Priorities"
+- **Writing code?** Reference SPEC.md §8 (red lines) + the relevant ADR
+- **Clarifying scope?** Read SPEC.md §1 (purpose & boundaries) and §10 (dev priorities)
 - **Stuck on architecture?** Check docs/adr/ for related decisions and rationale
-- **Building Obsidian templates?** See audio-obsidian-pipeline-spec.md Section 5
+- **Working on the claim schema?** See SPEC.md §5 — field table, `type` semantics, why cause/effect is free text
+- **Building Obsidian structure or queries?** See SPEC.md §6
 
 ## Structure Summary
 
 ```
-├── CONTEXT.md                          ← Start here: overview + constraints
-├── audio-obsidian-pipeline-spec.md     ← Detailed spec: stages, templates, cost strategy
+├── CONTEXT.md                          ← Start here: overview + red lines
+├── SPEC.md                             ← Authoritative spec: stages, data model, cost strategy
 ├── docs/
 │   ├── adr/
 │   │   ├── README.md                   ← ADR template & index
