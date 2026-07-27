@@ -20,6 +20,9 @@ ENV/
 .DS_Store
 Thumbs.db
 
+# Obsidian per-vault local config (prototypes create these on open)
+.obsidian/
+
 # Project-specific
 .env
 .env.local
