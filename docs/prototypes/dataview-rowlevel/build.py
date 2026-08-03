@@ -108,37 +108,41 @@ TYPES = ["fact"] * 12 + ["causal"] * 8 + ["prediction"] * 5 + \
 
 
 def bulk_row(i: int, rng: random.Random) -> str:
+    """V6 括号式单行 + 主题重复 key —— 唯一被实验 A/B 验证过能用的写法。
+    旧版用四空格续行 + 逗号分隔主题，已被 A/B 推翻，字段全挂不上、主题也不会解析成数组。"""
     t = rng.choice(TYPES)
     ents = ", ".join(f"[[{e}]]" for e in rng.sample(ENTITIES, rng.randint(1, 3)))
-    tops = ", ".join(rng.sample(TOPICS, rng.randint(1, 2)))
+    tops = rng.sample(TOPICS, rng.randint(1, 2))
     ts = f"{rng.randint(0, 2):02d}:{rng.randint(0, 59):02d}:{rng.randint(0, 59):02d}"
-    lines = [
-        f"- **A-{i:02d}** 合成断言 {i}，仅用于规模测试，内容无意义但字段形状真实",
-        f"    type:: {t}",
-        f"    情态:: {rng.choice(['确定', '推测', '传闻'])}",
-        "    谁说的:: 主播",
-        "    归因类型:: 无外部归因",
-        f"    录音时间戳:: {ts}",
+    fields = [
+        ("type", t),
+        ("情态", rng.choice(['确定', '推测', '传闻'])),
+        ("谁说的", "主播"),
+        ("归因类型", "无外部归因"),
+        ("录音时间戳", ts),
     ]
     if rng.random() < 0.7:   # 三成没有事件时间，用来看 null 在排序里沉哪儿
         y = rng.randint(1690, 2026)
-        lines += [f"    事件时间:: {y}-{rng.randint(1,12):02d}-{rng.randint(1,28):02d}",
-                  "    事件时间精度:: day"]
+        fields += [("事件时间", f"{y}-{rng.randint(1,12):02d}-{rng.randint(1,28):02d}"),
+                   ("事件时间精度", "day")]
     else:
-        lines += ["    事件时间:: ", "    事件时间精度:: 未知"]
+        fields += [("事件时间", ""), ("事件时间精度", "未知")]
     if t == "causal":
-        lines += ["    cause:: 合成原因，写得啰嗦一点以模拟真实长度和换行压力",
-                  "    effect:: 合成结果，同样写长一些，让表格列宽的手感接近真实情况"]
+        fields += [("cause", "合成原因，写得啰嗦一点以模拟真实长度和换行压力"),
+                   ("effect", "合成结果，同样写长一些，让表格列宽的手感接近真实情况")]
     if t == "prediction":
-        lines += ["    时限类型:: 事件锚定", "    时限规范:: null",
-                  "    应验判据原文:: 合成判据", "    检验状态:: 待检验"]
+        fields += [("时限类型", "事件锚定"), ("时限规范", "null"),
+                   ("应验判据原文", "合成判据"), ("检验状态", "待检验")]
     if t == "channel":
-        lines += ["    渠道类型:: 数据源", f"    名称:: 合成数据源 {i}",
-                  "    取数地址:: 某张月度表", "    链接:: ",
-                  "    原话口径:: 合成口径", "    为什么值得看:: 合成理由"]
-    lines += [f"    实体:: {ents}", f"    主题:: {tops}",
-              f"    source_quote:: 合成引文 {i}，用于占位。", "    合成:: 是"]
-    return "\n".join(lines) + "\n"
+        fields += [("渠道类型", "数据源"), ("名称", f"合成数据源 {i}"),
+                   ("取数地址", "某张月度表"), ("链接", ""),
+                   ("原话口径", "合成口径"), ("为什么值得看", "合成理由")]
+    fields += [("实体", ents)]
+    inline = " ".join(f"[{k}:: {v}]" for k, v in fields)
+    topic_inline = " ".join(f"[主题:: {top}]" for top in tops)
+    tail = f"[source_quote:: 合成引文 {i}，用于占位。] [合成:: 是]"
+    head = f"- **A-{i:02d}** 合成断言 {i}，仅用于规模测试，内容无意义但字段形状真实"
+    return f"{head} {inline} {topic_inline} {tail}\n"
 
 
 def write_bulk(n_eps: int, rows_per_ep: int = 30) -> None:
