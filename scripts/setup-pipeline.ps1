@@ -1,4 +1,4 @@
-# setup-pipeline.ps1 — 一次性装配：vault 目录 + 控制台/队列笔记 + PC 侧脚本 + 两个插件
+﻿# setup-pipeline.ps1 — 一次性装配：vault 目录 + 控制台/队列笔记 + PC 侧脚本 + 两个插件
 #
 # 用法：
 #   .\scripts\setup-pipeline.ps1              全装

@@ -219,9 +219,16 @@ class Panel extends MarkdownRenderChild {
     this.logEl.show();
     this.setRunning(true);
 
+    // 不用 -File 而用 -Command，是为了先把 OutputEncoding 设成 UTF-8 再 & 脚本。
+    // -File 模式下脚本自身的解析错误由 host 用 GBK 写出，这边按 UTF-8 解就是一屏乱码，
+    // 而那恰恰是最需要看清的一类错误。放进 -Command 就赶在解析之前设好了。
+    const q = (s) => "'" + String(s).replace(/'/g, "''") + "'";
+    const psCmd = "[Console]::OutputEncoding=[Text.Encoding]::UTF8; " +
+      "& " + q(this.cfg.worker) + " -Vault " + q(vaultArg);
+
     const { spawn } = require("child_process");
     const proc = spawn(this.cfg.pwsh,
-      ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", this.cfg.worker, "-Vault", vaultArg],
+      ["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", psCmd],
       { windowsHide: true });
     this.plugin.proc = proc;
 

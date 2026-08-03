@@ -1,4 +1,4 @@
-# worker.ps1 — story-machine 流水线执行器（阶段 0：音频 → 逐字稿 → 落 vault）
+﻿# worker.ps1 — story-machine 流水线执行器（阶段 0：音频 → 逐字稿 → 落 vault）
 #
 # 用法：
 #   .\scripts\worker.ps1                 处理完队列里所有待办就退出（单发）
@@ -104,6 +104,11 @@ function Read-Queue {
             Fields = $fields
         }
     }
+    # `, $rows` 是为了防止单行队列被 PowerShell 拆成裸对象；但队列为空时它反而
+    # 会让 `foreach ($row in Read-Queue)` 迭代一次、$row 是个空 Object[]，
+    # 于是 $row.Fields 在 StrictMode 下抛「property cannot be found」。
+    # Windows PowerShell 5.1 才会这样，pwsh 7 不会——插件默认拉的正是 5.1。
+    if ($rows.Count -eq 0) { return @() }
     return , $rows
 }
 
