@@ -104,12 +104,15 @@ function Read-Queue {
             Fields = $fields
         }
     }
-    # `, $rows` 是为了防止单行队列被 PowerShell 拆成裸对象；但队列为空时它反而
-    # 会让 `foreach ($row in Read-Queue)` 迭代一次、$row 是个空 Object[]，
-    # 于是 $row.Fields 在 StrictMode 下抛「property cannot be found」。
-    # Windows PowerShell 5.1 才会这样，pwsh 7 不会——插件默认拉的正是 5.1。
-    if ($rows.Count -eq 0) { return @() }
-    return , $rows
+    # 这里**不能**写 `return , $rows`。那个逗号本意是防止单行队列被拆成裸对象，
+    # 但裸函数名调用（`foreach ($row in Read-Queue)`，不加括号）不会把它拆开：
+    #   0 行  → $row 是空 Object[]，$row.Fields 在 StrictMode 下报「属性不存在」
+    #   1 行  → $row 是 Object[1]，$row.Fields 成员枚举后恰好解包成字典，**碰巧能跑**
+    #   2 行+ → $row 是 Object[2]，$row.Fields 成员枚举成 Object[]，
+    #           $row.Fields['ep'] 于是变成 [int]'ep' → 抛类型转换异常
+    # 队列长期只有一行，这个巧合把 bug 藏到了第二集入队才炸。
+    # 正确做法：直接返回，调用方一律 @(Read-Queue)，0/1/多 三种情况都兜得住。
+    return $rows
 }
 
 function Format-Row {
@@ -145,7 +148,7 @@ function Get-NextEp {
             if ($f.BaseName -match 'EP(\d+)') { $used += [int]$Matches[1] }
         }
     }
-    foreach ($r in Read-Queue) {
+    foreach ($r in @(Read-Queue)) {
         if ($r.Fields.Contains('ep') -and $r.Fields['ep'] -match 'EP(\d+)') { $used += [int]$Matches[1] }
     }
     $n = if ($used.Count) { ($used | Measure-Object -Maximum).Maximum + 1 } else { 1 }
@@ -356,7 +359,7 @@ $STEPS = @{
 function Initialize-Queue {
     <# 新粘的裸链接补上 ep 和阶段；卡在「*中」的行打回重跑（崩溃续跑）。#>
     $changed = $false
-    foreach ($row in Read-Queue) {
+    foreach ($row in @(Read-Queue)) {
         $stage = if ($row.Fields.Contains('阶段')) { $row.Fields['阶段'] } else { '' }
         if (-not $row.Fields.Contains('ep') -or $row.Fields['ep'] -eq '') {
             $row.Fields['ep'] = Get-NextEp
@@ -383,7 +386,7 @@ function Initialize-Queue {
 function Invoke-QueuePass {
     <# 扫一遍队列，推进第一个有待办的行。返回是否做了事。#>
     Initialize-Queue
-    foreach ($row in Read-Queue) {
+    foreach ($row in @(Read-Queue)) {
         if (-not $row.Fields.Contains('阶段')) { continue }
         $stage = $row.Fields['阶段']
         if (-not $FLOW.Contains($stage)) { continue }     # 完成 / 失败 / 人手改的值
@@ -426,7 +429,7 @@ if (-not (Test-Path $QueuePath)) {
 }
 
 if ($Reset) {
-    foreach ($row in Read-Queue) {
+    foreach ($row in @(Read-Queue)) {
         if ($row.Fields.Contains('ep') -and $row.Fields['ep'] -eq $Reset) {
             $row.Fields['阶段'] = '待下载'
             $row.Fields['进度'] = ''
