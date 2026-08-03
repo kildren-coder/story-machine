@@ -1,0 +1,141 @@
+.sm-pipe {
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: var(--background-secondary);
+}
+
+.sm-pipe-bar {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.sm-pipe-input {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.9em;
+}
+
+.sm-pipe-btn {
+  white-space: nowrap;
+  cursor: pointer;
+  font-size: 0.85em;
+}
+
+.sm-pipe-run {
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
+}
+
+.sm-pipe-stop {
+  background: var(--background-modifier-error);
+  color: var(--text-on-accent);
+}
+
+.sm-pipe-mini {
+  margin-top: 6px;
+  padding: 2px 8px;
+  font-size: 0.8em;
+}
+
+.sm-pipe-empty {
+  color: var(--text-muted);
+  font-size: 0.9em;
+  padding: 8px 2px;
+}
+
+.sm-pipe-row {
+  border-left: 3px solid var(--background-modifier-border);
+  padding: 6px 0 6px 10px;
+  margin-bottom: 6px;
+}
+
+.sm-pipe-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.sm-pipe-ep {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-normal);
+}
+
+.sm-pipe-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-muted);
+  font-size: 0.9em;
+}
+
+.sm-pipe-stage {
+  font-size: 0.8em;
+  padding: 1px 7px;
+  border-radius: 10px;
+  background: var(--background-modifier-border);
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.sm-pipe-track {
+  height: 4px;
+  border-radius: 2px;
+  background: var(--background-modifier-border);
+  margin-top: 6px;
+  overflow: hidden;
+}
+
+.sm-pipe-fill {
+  height: 100%;
+  background: var(--interactive-accent);
+  transition: width 0.4s ease;
+}
+
+.sm-pipe-detail,
+.sm-pipe-meta,
+.sm-pipe-note {
+  font-size: 0.78em;
+  color: var(--text-faint);
+  margin-top: 4px;
+  font-variant-numeric: tabular-nums;
+}
+
+.sm-pipe-err {
+  font-size: 0.8em;
+  color: var(--text-error);
+  margin-top: 4px;
+  word-break: break-word;
+}
+
+/* 阶段配色 */
+.sm-stage-busy { border-left-color: var(--interactive-accent); }
+.sm-stage-busy .sm-pipe-stage {
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
+}
+.sm-stage-done { border-left-color: var(--color-green); }
+.sm-stage-done .sm-pipe-ep { color: var(--color-green); }
+.sm-stage-fail { border-left-color: var(--text-error); }
+.sm-stage-fail .sm-pipe-stage {
+  background: var(--background-modifier-error);
+  color: var(--text-on-accent);
+}
+
+.sm-pipe-log {
+  margin-top: 10px;
+  max-height: 220px;
+  overflow: auto;
+  font-size: 0.75em;
+  line-height: 1.45;
+  background: var(--background-primary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 4px;
+  padding: 6px 8px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}

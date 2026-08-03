@@ -412,10 +412,12 @@ Anthropic 使用条款限制用其输出开发或训练 AI 模型，不因「仅
 ## 6. Obsidian Vault 结构
 
 ```
-Vault/
+Vault/story-machine/
 ├── 10-Episodes/       EP 笔记：断言行的物理容器 + 逐字稿回链 + 集级 frontmatter
 ├── 15-Materials/      精简材料（按主题分段，人的主阅读面）
 ├── 30-Threads/        脉络笔记（人写，永不自动生成）
+├── _assets/           音频与逐字稿正本（EP01.m4a / EP01.transcript.json / EP01.txt）
+├── _pipeline/         流水线控制台与队列（控制台.md / 队列.md）
 ├── _review/           人工核对暂存区（不参与图谱）
 ├── _pairs/            校对配对 pre/post 快照（永久资产，不参与图谱）
 ├── _queries/          保存的查询（待检验预测队列、人物时间轴、主题视图…）
@@ -424,6 +426,10 @@ Vault/
     ├── sources.json   归因补全（置信度与依据必填）
     └── topics.md      主题词表（人工维护，只增不改）
 ```
+
+**`_assets/` 里三种文件的关系**（§4 阶段0）：`EP{n}.transcript.json` 是**正本**，永久不可变；`EP{n}.txt` 是派生渲染，随时可从正本重生成；`EP{n}.m4a` 是音频，必须在 vault 内——时间戳跳播插件靠 `vault.getResourcePath` 取播放地址，vault 外的文件拿不到（ADR 0001）。词时间戳 `EP{n}.words.json` **不进 vault**，留在 PC 的 `E:\asr\staged\`：它是补跑说话人分离的原料，体积大且非面向人。
+
+**`_pipeline/` 是运行时状态，不是内容。** 队列笔记由 worker 改写，人只往里粘链接。它用的是 §5.1 那套括号式 inline field，所以进度可以直接被 Dataview 查询。
 
 **砍掉了 `20-People/` `21-Events/` `22-Places/` `23-Concepts/` `24-Periods/`**——不再自动生成实体笔记。
 
@@ -440,15 +446,25 @@ Vault/
 type: episode
 episode: EP01
 title: 外国如何干涉美国选举
+音频: EP01.m4a               # ← 时间戳跳播的绑定前提，见下
 播出日期: 2026-07-20        # 时事断言的「现在」是哪天
 主播: [xxx]
 transcript: ../_assets/EP01.transcript.json
+逐字稿渲染: ../_assets/EP01.txt
+时长: 02:21:25
+来源: https://www.bilibili.com/video/BVxxx
+转写引擎: faster-whisper large-v3
+说话人分离: pending          # pending | 3dspeaker-campp
 derived_from: EP01.transcript.repaired.md
 engine: claude-opus-5
 prompt_version: stage2-extract@v0.3
 generated_at: 2026-07-27
 ---
 ```
+
+> **`音频:` 这一行不能省。** `story-machine-timestamps` 插件靠它把本笔记里的时间戳绑到正确的那一集；**没有这一行，插件完全不介入**（既是开关也是防线）。生成 EP 笔记的脚本必须写上。为什么不按 DOM 位置猜见 ADR 0001。
+>
+> `说话人分离: pending` 是**显式标记，不是忘了填**。转写产出的 `speaker` 字段先是 `null`，槽位留着，补跑分离时原地填、下游不用改。
 
 ### 6.2 必备的保存查询（`_queries/`）
 
@@ -577,8 +593,8 @@ generated_at: 2026-07-27
 
 ## 10. 开发优先级
 
-1. **打通笔记本↔PC 桥接**（Tailscale+SSH）与远程转写脚本——「一句命令，音频进逐字稿出」
-2. **`/prototype` 验证 Dataview 行级查询**：续行行内字段是否挂到父 list item、几千行规模下的手感与性能。**这是唯一一件纸面答不了、且会推翻数据模型的事**（§5.1）
+1. ~~**打通笔记本↔PC 桥接**（Tailscale+SSH）与远程转写脚本——「一句命令，音频进逐字稿出」~~ **已完成（2026-08-03）**：`_pipeline/控制台.md` 粘链接 → 点「运行」→ 下载 / 转写 / 取回 / 建 EP 笔记四步自动走完。EP01（2h21m）实测全程 **4 分 34 秒**（下载 40s、转写 212s ＝ 40x 实时、取回 14s）。见 ADR 0002。**唯一未做的子步是说话人分离**——`speaker` 出 `null`、`diarization: pending`，词时间戳存 PC 侧 `EP{n}.words.json`，补跑时不必重转。
+2. ~~**`/prototype` 验证 Dataview 行级查询**：续行行内字段是否挂到父 list item、几千行规模下的手感与性能。**这是唯一一件纸面答不了、且会推翻数据模型的事**（§5.1）~~ **已完成（2026-07）**：续行式不成立，改括号式 `[key:: value]`，见 §5.1
 3. **只做 `channel` 抽取**——从逐字稿抽「某数据在某处可查」。最小、立即有用、直接兑现目的 (B)
 4. 扩到 `fact` + `prediction`（简单、可核查）+ 三闸门出口校验
 5. Obsidian 目录结构 + `_review/` 读写 + 确认信号
@@ -601,7 +617,7 @@ generated_at: 2026-07-27
 - **主题词表的初始种子**——跑几集才有，不要提前编
 - `_review/` 「确认通过」用什么信号（改文件名 / 加 frontmatter / CLI 参数）
 - 分块重叠时长、材料压缩比的具体默认值——先用保守值跑几集再调
-- CLI 是否需要批处理队列模式，还是完全手动逐次触发
+- ~~CLI 是否需要批处理队列模式，还是完全手动逐次触发~~ **已解决（2026-08-03）**：需要队列，但队列不在 CLI 里——`_pipeline/队列.md` 本身就是状态机，worker 无状态地推进它。见 ADR 0002
 - Max 5x 是否够用，实跑两周后再定
 
 ---

@@ -1,0 +1,9 @@
+{
+  "id": "story-machine-pipeline",
+  "name": "story-machine 流水线控制台",
+  "version": "0.1.0",
+  "minAppVersion": "1.4.0",
+  "description": "在笔记里粘 B 站链接入队，一键跑「下载 → 转写 → 取回 → 建 EP 笔记」，进度直接看。",
+  "author": "kildren",
+  "isDesktopOnly": true
+}

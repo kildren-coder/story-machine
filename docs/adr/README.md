@@ -31,6 +31,7 @@ Each ADR is a markdown file named `NNNN-kebab-case-title.md` with:
 ## Current ADRs
 
 - [0001. 时间戳跳播自研 Obsidian 插件](0001-时间戳跳播自研插件.md) — 现成的 `timestamp-player` 按 DOM 位置绑音频，跨集必然静默播错集；`HH:MM:SS` 还会静默错 60 倍。
+- [0002. 队列笔记即状态机，worker 只是执行器](0002-队列笔记即状态机.md) — 状态落在 `_pipeline/队列.md` 里换来崩溃可续跑，进度显示白来（Obsidian 自己重载文件），插件与 worker 之间零 IPC。
 
 Existing high-level rationales live in CONTEXT.md; ADRs capture deeper design choices.
 
