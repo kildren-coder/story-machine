@@ -310,6 +310,21 @@ function Step-Scaffold {
         return
     }
 
+    # 简介/标签是嘉宾名单常见的唯一书面出处，且 UP 主改简介后就没了。
+    # 原样搬进笔记当点名的证据——只搬运，不解析谁是嘉宾（那是人的判断）。
+    # 早于本功能下载的集数 meta.json 里没有这两个字段，StrictMode 下要先探再取。
+    $metaKeys = $meta.PSObject.Properties.Name
+    $desc = if ($metaKeys -contains 'description') { "$($meta.description)".Trim() } else { '' }
+    $tags = if ($metaKeys -contains 'tags') { @($meta.tags) } else { @() }
+
+    $srcBlock = @()
+    if ($desc -or $tags.Count) {
+        $srcBlock += '> [!quote]- B 站原始简介（搬运，未加工——点名嘉宾时看这里）'
+        if ($tags.Count) { $srcBlock += "> **标签**：$($tags -join '、')" ; $srcBlock += '>' }
+        foreach ($l in ($desc -split "`r?`n")) { $srcBlock += "> $l" }
+        $srcBlock += ''
+    }
+
     # frontmatter 里的 `音频:` 是时间戳跳播插件的绑定前提（ADR 0001），不能省。
     $note = @(
         '---'
@@ -319,6 +334,7 @@ function Step-Scaffold {
         "音频: $ep$ext"
         "播出日期: $airDate"
         '主播: []'
+        '嘉宾: []'
         "transcript: ../_assets/$ep.transcript.json"
         "逐字稿渲染: ../_assets/$ep.txt"
         "时长: $($Row.Fields['时长'])"
@@ -334,11 +350,12 @@ function Step-Scaffold {
         '> 断言行由阶段 2 抽取、阶段 3 人工审核后落到下面。**现在是空的，这是正常的。**'
         '> 逐字稿正本在 `_assets/`，永不要求通读。'
         ''
+    ) + $srcBlock + @(
         '## 断言'
         ''
         '## 待办'
         ''
-        '- [ ] 主播点名（把 frontmatter 的 `主播:` 填上）'
+        '- [ ] 点名：把 frontmatter 的 `主播:` `嘉宾:` 填上（对照上面的简介与 `SPEAKER_XX`）'
         '- [ ] 核对 `播出日期`——这里填的是**投稿日期**，直播日期常常早一天'
         '- [ ] 阶段 2 抽取 → `_review/`'
         ''

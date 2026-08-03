@@ -167,6 +167,10 @@ def cmd_download(ep, url):
         "audio_bytes": dst.stat().st_size,
         "uploader": j.get("uploader"),
         "upload_date": j.get("upload_date"),
+        # 简介和 tag 常常是嘉宾名单唯一的书面出处，而且过期就没了（UP 主会改）。
+        # 原样搬运，不解析不推断——谁是嘉宾由人看着简介点名。
+        "description": j.get("description") or "",
+        "tags": j.get("tags") or [],
         "downloaded_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
     }
     (STAGE_DIR / (ep + ".meta.json")).write_text(
@@ -301,6 +305,40 @@ def cmd_transcribe(ep):
     out("PROGRESS", "%.1f" % total, "%.1f" % total)
 
 
+def cmd_meta(ep, url):
+    """只重取元数据，不碰音频。
+
+    用途：(a) 给早于「抓简介」这个功能下载的集数补 description/tags；
+          (b) UP 主事后改了简介或标题时刷新。
+    音频相关字段（audio_file/audio_bytes/downloaded_at）原样保留。
+    """
+    path = STAGE_DIR / (ep + ".meta.json")
+    if not path.exists():
+        fail("no meta.json for %s at %s" % (ep, path))
+    meta = json.loads(path.read_text(encoding="utf-8"))
+
+    clean, bv, part = normalize_url(url)
+    rc, lines = ytdlp(["-J", "--no-playlist", "--skip-download", clean])
+    if rc != 0:
+        fail("yt-dlp metadata failed (exit %d): %s" % (rc, " | ".join(lines[-3:])))
+    meta_raw = next((l for l in lines if l.startswith("{")), None)
+    if meta_raw is None:
+        fail("yt-dlp -J produced no JSON")
+    j = json.loads(meta_raw)
+
+    for key, val in (("title", j.get("title")),
+                     ("uploader", j.get("uploader")),
+                     ("upload_date", j.get("upload_date")),
+                     ("description", j.get("description") or ""),
+                     ("tags", j.get("tags") or [])):
+        meta[key] = val
+    meta["meta_refreshed_at"] = time.strftime("%Y-%m-%dT%H:%M:%S")
+    path.write_text(json.dumps(meta, ensure_ascii=False, indent=1), encoding="utf-8")
+
+    info("meta refreshed: desc=%d chars, tags=%d"
+         % (len(meta["description"]), len(meta["tags"])))
+
+
 # --------------------------------------------------------------------------
 
 def main():
@@ -314,6 +352,10 @@ def main():
     t = sub.add_parser("transcribe")
     t.add_argument("--ep", required=True)
 
+    m = sub.add_parser("meta")
+    m.add_argument("--ep", required=True)
+    m.add_argument("--url", required=True)
+
     a = ap.parse_args()
     if not re.fullmatch(r"EP\d{2,4}", a.ep):
         fail("--ep must look like EP01 (got %r)" % a.ep)
@@ -322,6 +364,8 @@ def main():
         cmd_download(a.ep, a.url)
     elif a.cmd == "transcribe":
         cmd_transcribe(a.ep)
+    elif a.cmd == "meta":
+        cmd_meta(a.ep, a.url)
 
 
 if __name__ == "__main__":
