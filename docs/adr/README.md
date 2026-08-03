@@ -30,7 +30,9 @@ Each ADR is a markdown file named `NNNN-kebab-case-title.md` with:
 
 ## Current ADRs
 
-(To be added as decisions are documented. Existing high-level rationales live in CONTEXT.md; ADRs capture deeper design choices.)
+- [0001. 时间戳跳播自研 Obsidian 插件](0001-时间戳跳播自研插件.md) — 现成的 `timestamp-player` 按 DOM 位置绑音频，跨集必然静默播错集；`HH:MM:SS` 还会静默错 60 倍。
+
+Existing high-level rationales live in CONTEXT.md; ADRs capture deeper design choices.
 
 ---
 
