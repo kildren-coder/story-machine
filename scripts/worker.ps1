@@ -4,6 +4,7 @@
 #   .\scripts\worker.ps1                 处理完队列里所有待办就退出（单发）
 #   .\scripts\worker.ps1 -Watch          常驻，每 5 秒扫一次队列笔记
 #   .\scripts\worker.ps1 -Reset EP02     把某一集打回「待下载」重跑
+#   .\scripts\worker.ps1 -Name EP02      只跑这一集的点名回填（不碰队列）
 #
 # 设计：**队列笔记是状态机，本脚本是执行器。**
 #   状态全部落在 `_pipeline/队列.md` 的括号式 inline field 里，所以
@@ -18,7 +19,8 @@ param(
     [string]$Host5070 = "pc-5070",
     [switch]$Watch,
     [int]$PollSeconds = 5,
-    [string]$Reset
+    [string]$Reset,
+    [string]$Name          # 只跑某一集的点名回填，不碰队列
 )
 
 $ErrorActionPreference = 'Stop'
@@ -37,6 +39,9 @@ $RemoteScript = "C:\asr\smpc.py"
 # 说话人分离要 torch，转写 venv 必须保持无 torch（SPEC 阶段0：独立 venv、纯 CPU）
 $RemoteDiarPy = "C:\asr\venv-diar\Scripts\python.exe"
 $RemoteDiarScript = "C:\asr\smdiar.py"
+# 声纹比对在本机跑：质心随 EP{n}.diar.json 回来了，只要 numpy
+$LocalPy = "python"
+$SpeakersScript = Join-Path (Split-Path $PSScriptRoot -Parent) "pc\speakers.py"
 
 # 阶段流转。键是「待办」，值是执行时的「进行中」标记与下一站。
 $FLOW = [ordered]@{
@@ -311,27 +316,160 @@ function Step-Fetch {
 # 第一次出现在哪。那个时间戳会被 story-machine-timestamps 变成跳播按钮（ADR 0001），
 # 于是「这是谁」只要点一下听两句就有答案，不用去逐字稿里翻。
 # 用注释标记围起来，是为了补跑分离后能原地重写而不碰人写的任何东西。
+#
+# 认得出来的由声纹库直接填好（pc/speakers.py）；认不出来的显示「未知N」，
+# 行尾留一个 `[SPEAKER_XX:: ]` 空位给人填。填完 worker 下一轮入库，往后自动认。
+# 认对了的也把名字留在方括号里——那是更正入口：改一个字就是一次重新入库。
 $SpkBegin = '<!-- speakers:auto -->'
 $SpkEnd = '<!-- /speakers -->'
+$SPK_FIELD_RE = '\[(SPEAKER_\d+)::\s*([^\]]*)\]'
+
+function Read-SpeakerNames {
+    param([string[]]$Lines)
+    $names = @{}
+    foreach ($l in $Lines) {
+        foreach ($m in [regex]::Matches($l, $SPK_FIELD_RE)) {
+            $v = $m.Groups[2].Value.Trim()
+            if ($v -ne '') { $names[$m.Groups[1].Value] = $v }
+        }
+    }
+    return $names
+}
+
+function Resolve-Speakers {
+    <# 跑 pc\speakers.py：先把人填的名字入库，再给每个簇一个归属。#>
+    param([string]$Ep, $Names)
+    $diarPath = Join-Path $AssetsDir "$Ep.diar.json"
+    if (-not (Test-Path $diarPath)) { return $null }
+    # 声纹库之前分离的集数没有质心。这不是错误，是这一集还没重跑分离——
+    # 当成「没这一集」跳过，别每轮抛一次异常刷屏。
+    if ((Get-Content $diarPath -Raw -Encoding utf8 | ConvertFrom-Json).PSObject.Properties.Name -notcontains 'centroids') {
+        Write-Log "  · $Ep.diar.json 里没有声纹质心（分离于声纹库之前），跳过点名；重跑一次分离即可" DarkGray
+        return $null
+    }
+
+    $outFile = Join-Path $env:TEMP "sm-$Ep-speakers.json"
+    Remove-Item $outFile -Force -ErrorAction SilentlyContinue
+    $argv = @($SpeakersScript, '--ep', $Ep, '--vault', $Vault, '--out', $outFile)
+    if ($Names -and $Names.Count) {
+        # 中文只走文件，不进 argv——跟 ssh 那条契约同一个理由，本地 argv 也不例外
+        $inFile = Join-Path $env:TEMP "sm-$Ep-names.json"
+        [System.IO.File]::WriteAllText($inFile, (ConvertTo-Json -InputObject $Names -Compress),
+            [System.Text.UTF8Encoding]::new($false))
+        $argv += @('--names', $inFile)
+    }
+    $prevEap = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try { $log = & $LocalPy @argv 2>&1; $rc = $LASTEXITCODE }
+    finally { $ErrorActionPreference = $prevEap }
+    if ($rc -ne 0) { throw "声纹比对失败（$Ep）：$(($log -join ' ').Trim())" }
+    foreach ($l in $log) { if ("$l" -match '^入库') { Write-Log "    $l" Green } }
+    if (-not (Test-Path $outFile)) { throw "speakers.py 报成功但没写出 $outFile" }
+    return Get-Content $outFile -Raw -Encoding utf8 | ConvertFrom-Json
+}
 
 function Get-SpeakerBlock {
-    param($Tr)
-    $order = @(); $secs = @{}; $first = @{}
-    foreach ($s in @($Tr.segments)) {
-        if (-not $s.speaker) { continue }
-        if (-not $secs.ContainsKey($s.speaker)) {
-            $order += $s.speaker; $secs[$s.speaker] = 0.0; $first[$s.speaker] = $s.start
+    param($Res)
+    if ($null -eq $Res) { return @() }
+    $people = @($Res.people)
+    if ($people.Count -lt 1) { return @() }
+    $total = 0.0
+    foreach ($p in $people) { if ($p.seconds) { $total += [double]$p.seconds } }
+
+    $block = @(
+        $SpkBegin
+        '> [!question]- 这集都有谁'
+        '> 「未知N」是声纹库认不出来的人：点它的时间戳听两句，把名字填进行尾方括号里保存，'
+        '> worker 下一轮入库，往后各集自动认出来。第一次登记可以连角色一起写：`历史哥 嘉宾`。'
+        '> 认错了就直接改方括号里的字。本块由 worker 重写，方括号以外别写东西。'
+    )
+    foreach ($p in $people) {
+        $pct = if ($total -gt 0) { '{0:P0}' -f ([double]$p.seconds / $total) } else { '—' }
+        $len = ConvertTo-Hms $p.seconds
+        $when = ConvertTo-Hms $p.first
+        if ($p.status -eq 'known') {
+            $badge = @($p.role, ('声纹库 {0:N2}' -f [double]$p.score)) | Where-Object { $_ }
+            $block += ('> - `{0}` **{1}**（{2}）说了 {3}（{4}），首次出现 {5}  [{0}:: {1}]' -f `
+                    $p.speaker, $p.name, ($badge -join ' · '), $len, $pct, $when)
+            continue
         }
-        $secs[$s.speaker] += ($s.end - $s.start)
-    }
-    if ($order.Count -lt 1) { return @() }
-    $total = ($secs.Values | Measure-Object -Sum).Sum
-    $block = @($SpkBegin, '> [!question]- 说话人待点名（本块由 worker 重写，别在标记之间写东西）')
-    foreach ($n in $order) {
-        $block += ('> - `{0}` 说了 {1}（{2:P0}），首次出现 {3}' -f `
-                $n, (ConvertTo-Hms $secs[$n]), ($secs[$n] / $total), (ConvertTo-Hms $first[$n]))
+        $warn = ''
+        if ($p.status -eq 'dup') {
+            $warn = '  ⚠ 声纹跟 {0}（{1}）是同一个人（{2:N2}）——多半是分离器把一个人切成了两半；确实是两个人就照填' -f `
+                $p.dup_of, $p.name, [double]$p.score
+        }
+        elseif ($p.status -eq 'ambiguous') {
+            $warn = '  ⚠ 库里 {0} 都像，不猜' -f (@($p.like) -join '、')
+        }
+        $block += ('> - `{0}` **{1}** 说了 {2}（{3}），首次出现 {4} → 点名 [{0}:: ]{5}' -f `
+                $p.speaker, $p.unknown, $len, $pct, $when, $warn)
     }
     return $block + @($SpkEnd, '')
+}
+
+function Format-YamlList {
+    param([string[]]$Items)
+    $xs = @($Items | Where-Object { $_ })
+    if ($xs.Count -eq 0) { return '[]' }
+    return '[' + (($xs | ForEach-Object { '"' + ($_ -replace '"', '\"') + '"' }) -join ', ') + ']'
+}
+
+function Set-Frontmatter {
+    <# 改一个 frontmatter 字段；没有就补在 frontmatter 末尾。
+       -OnlyIfEmpty：人已经填过就一个字都不碰。#>
+    param([string[]]$Lines, [string]$Key, [string]$Value, [switch]$OnlyIfEmpty)
+    if ($Lines.Count -lt 2 -or $Lines[0] -ne '---') { return @{ Lines = $Lines; Changed = $false } }
+    $end = -1
+    for ($i = 1; $i -lt $Lines.Count; $i++) { if ($Lines[$i] -eq '---') { $end = $i; break } }
+    if ($end -lt 0) { return @{ Lines = $Lines; Changed = $false } }
+
+    for ($i = 1; $i -lt $end; $i++) {
+        if ($Lines[$i] -match "^$([regex]::Escape($Key))\s*:\s*(.*)$") {
+            $cur = $Matches[1].Trim()
+            if ($OnlyIfEmpty -and $cur -ne '' -and $cur -ne '[]') {
+                return @{ Lines = $Lines; Changed = $false }
+            }
+            if ($cur -eq $Value) { return @{ Lines = $Lines; Changed = $false } }
+            $new = @($Lines)
+            $new[$i] = "$Key`: $Value"
+            return @{ Lines = $new; Changed = $true }
+        }
+    }
+    $head = @($Lines[0..($end - 1)])
+    $tail = @($Lines[$end..($Lines.Count - 1)])
+    return @{ Lines = $head + @("$Key`: $Value") + $tail; Changed = $true }
+}
+
+function Sync-EpisodeSpeakers {
+    <# 读笔记里人填的点名 → 入库 → 重写小表 + frontmatter。返回是否改动了文件。#>
+    param([string]$NotePath, [string]$Ep)
+    $lines = @(Read-Utf8Lines $NotePath)
+    $res = Resolve-Speakers -Ep $Ep -Names (Read-SpeakerNames $lines)
+    if ($null -eq $res) { return $false }
+
+    $upd = Update-SpeakerBlock -Lines $lines -Block (Get-SpeakerBlock $res)
+    $lines = $upd.Lines
+    $changed = $upd.Changed
+
+    # `人物:` 归机器所有，永远重写——未知的也列进去（写成「未知1」），
+    # 这样跨集查询一眼看得出哪几集还欠点名。
+    # 只认 known。疑似重复的簇虽然带着人名，但它列进去就成了「人物: [瓜哥, 瓜哥]」——
+    # 那既不是事实，也把该让人处理的过切藏了起来。写「未知N」，让它留在待点名表里。
+    $who = foreach ($p in @($res.people)) { if ($p.status -eq 'known') { $p.name } else { $p.unknown } }
+    $r = Set-Frontmatter -Lines $lines -Key '人物' -Value (Format-YamlList $who)
+    $lines = $r.Lines; $changed = $changed -or $r.Changed
+
+    # 主播/嘉宾是人的字段，只在还空着时替他填一次，填过就再也不碰
+    foreach ($role in @('主播', '嘉宾')) {
+        $hit = @(foreach ($p in @($res.people)) { if ($p.role -eq $role -and $p.name) { $p.name } })
+        if ($hit.Count) {
+            $r = Set-Frontmatter -Lines $lines -Key $role -Value (Format-YamlList $hit) -OnlyIfEmpty
+            $lines = $r.Lines; $changed = $changed -or $r.Changed
+        }
+    }
+
+    if ($changed) { Write-Utf8Lines -Path $NotePath -Lines $lines }
+    return $changed
 }
 
 function Update-SpeakerBlock {
@@ -405,13 +543,12 @@ function Step-Scaffold {
                 }
             }
         }
-        $upd = Update-SpeakerBlock -Lines $lines -Block (Get-SpeakerBlock $tr)
-        $lines = $upd.Lines
-        if ($hits -or $upd.Changed) {
-            Write-Utf8Lines -Path $notePath -Lines $lines
+        if ($hits) { Write-Utf8Lines -Path $notePath -Lines $lines }
+        $spk = Sync-EpisodeSpeakers -NotePath $notePath -Ep $ep
+        if ($hits -or $spk) {
             $what = @()
             if ($hits) { $what += "$hits 个 frontmatter 字段" }
-            if ($upd.Changed) { $what += '说话人小表' }
+            if ($spk) { $what += '说话人小表' }
             Write-Log "  ✓ EP 笔记已存在，更新了$($what -join '、')（其余正文未动）" Green
         } else {
             Write-Log "  · EP 笔记已存在且元数据一致，未改动" DarkGray
@@ -444,6 +581,7 @@ function Step-Scaffold {
         "播出日期: $airDate"
         '主播: []'
         '嘉宾: []'
+        '人物: []'          # 声纹库认出来的全部说话人，含还没点名的「未知N」；worker 独占
         "transcript: ../_assets/$ep.transcript.json"
         "逐字稿渲染: ../_assets/$ep.txt"
         "时长: $($Row.Fields['时长'])"
@@ -459,17 +597,19 @@ function Step-Scaffold {
         '> 断言行由阶段 2 抽取、阶段 3 人工审核后落到下面。**现在是空的，这是正常的。**'
         '> 逐字稿正本在 `_assets/`，永不要求通读。'
         ''
-    ) + $srcBlock + (Get-SpeakerBlock $tr) + @(
+    ) + $srcBlock + @(
         '## 断言'
         ''
         '## 待办'
         ''
-        '- [ ] 点名：把 frontmatter 的 `主播:` `嘉宾:` 填上（对照上面的简介与 `SPEAKER_XX`）'
+        '- [ ] 点名：上面「这集都有谁」里还剩「未知N」的，听两句填进方括号'
         '- [ ] 核对 `播出日期`——这里填的是**投稿日期**，直播日期常常早一天'
         '- [ ] 阶段 2 抽取 → `_review/`'
         ''
     )
     Write-Utf8Lines -Path $notePath -Lines $note
+    # 说话人小表由声纹库现算，落盘后原地插进去，跟补跑分离时走的是同一条路
+    $null = Sync-EpisodeSpeakers -NotePath $notePath -Ep $ep
     Write-Log "  ✓ EP 笔记已建：$([System.IO.Path]::GetFileName($notePath))" Green
 }
 
@@ -507,6 +647,39 @@ function Initialize-Queue {
             }
         }
         if ($changed) { Save-Row $row; $changed = $false }
+    }
+}
+
+$script:NamedAt = @{}
+
+function Invoke-NamingPass {
+    <# 扫 EP 笔记，把人刚填的点名入库并回填。
+
+       点名发生在流水线跑完之后（笔记建好，人才看得到「未知N」），所以它不能挂在
+       队列的某个阶段上，只能每轮扫一遍。按「笔记 + diar.json 的修改时间」记账跳过
+       没动过的集，免得每 5 秒白起一堆 python。#>
+    param([string]$Only)
+    if (-not (Test-Path $EpisodesDir)) { return }
+    foreach ($f in Get-ChildItem $EpisodesDir -Filter '*.md' -File -ErrorAction SilentlyContinue) {
+        if ($f.BaseName -notmatch '^(EP\d+)') { continue }
+        $ep = $Matches[1]
+        if ($Only -and $ep -ne $Only) { continue }
+        $diar = Join-Path $AssetsDir "$ep.diar.json"
+        if (-not (Test-Path $diar)) { continue }
+
+        $stamp = "$($f.LastWriteTimeUtc.Ticks)/$((Get-Item $diar).LastWriteTimeUtc.Ticks)"
+        if (-not $Only -and $script:NamedAt[$f.FullName] -eq $stamp) { continue }
+        try {
+            if (Sync-EpisodeSpeakers -NotePath $f.FullName -Ep $ep) {
+                Write-Log "$ep 说话人小表已回填" Green
+            }
+            # 自己刚写过就要重新取修改时间，否则下一轮又跑一遍
+            $script:NamedAt[$f.FullName] =
+                "$((Get-Item $f.FullName).LastWriteTimeUtc.Ticks)/$((Get-Item $diar).LastWriteTimeUtc.Ticks)"
+        }
+        catch {
+            Write-Log "$ep 点名回填失败：$_" Red
+        }
     }
 }
 
@@ -569,11 +742,20 @@ if ($Reset) {
     throw "队列里没有 $Reset"
 }
 
+if ($Name) {
+    Invoke-NamingPass -Only $Name
+    Write-Log "$Name 点名回填完毕" Green
+    exit 0
+}
+
 Write-Log "队列：$QueuePath" DarkGray
 if ($Watch) {
     Write-Log "常驻模式，每 $PollSeconds 秒扫一次。Ctrl+C 退出。" Cyan
     while ($true) {
-        try { while (Invoke-QueuePass) { } }
+        try {
+            while (Invoke-QueuePass) { }
+            Invoke-NamingPass
+        }
         catch { Write-Log "扫描出错：$_" Red }
         Start-Sleep -Seconds $PollSeconds
     }
@@ -581,5 +763,6 @@ if ($Watch) {
 else {
     $did = $false
     while (Invoke-QueuePass) { $did = $true }
+    Invoke-NamingPass
     if (-not $did) { Write-Log "队列里没有待办。" DarkGray }
 }

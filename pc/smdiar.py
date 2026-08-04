@@ -145,8 +145,14 @@ def load_emb_cache(path, bounds):
 
 # ---------------------------------------------------------------- clustering
 
-MIN_SHARE = 0.05     # a real participant holds at least this much of the talk time
-MIN_SECONDS = 60.0   # ...and at least this many seconds, for short episodes
+# A real participant talks for at least this long. Deliberately absolute and not
+# a share of the episode: a 5% floor sounds harmless until you notice that 5% of
+# a three-hour show is nine minutes, so a guest who says his piece in eight gets
+# silently merged into the host. That guest is exactly who the roll-call in the
+# EP note exists to surface. An outlier cluster is a second or two, so 60s alone
+# already keeps those out, and over-splitting is the cheap failure here: a human
+# spots a duplicate at naming time in seconds, a silent merge is invisible.
+MIN_SECONDS = 60.0
 
 
 def pick_labels(embs, durations, forced_k, max_k):
@@ -165,7 +171,7 @@ def pick_labels(embs, durations, forced_k, max_k):
 
     K: silhouette alone still is not enough, because a lone outlier keeps
     scoring well at every K. So a K only counts if every cluster holds a real
-    share of the talk time; otherwise it is an outlier, not a person.
+    amount of talk time; otherwise it is an outlier, not a person.
     """
     import numpy as np
     from sklearn.cluster import AgglomerativeClustering
@@ -194,7 +200,7 @@ def pick_labels(embs, durations, forced_k, max_k):
         sil = float(silhouette_score(x, lab, metric="cosine"))
         secs = [float(dur[lab == c].sum()) for c in range(k)]
         smallest = min(secs)
-        ok = smallest >= MIN_SECONDS and smallest / total >= MIN_SHARE
+        ok = smallest >= MIN_SECONDS
         info("  K=%d silhouette=%.3f smallest_cluster=%.0fs (%.1f%%) %s"
              % (k, sil, smallest, 100 * smallest / total, "ok" if ok else "REJECTED"))
         if ok and sil > best_sil:
@@ -212,6 +218,32 @@ def pick_labels(embs, durations, forced_k, max_k):
         info("best silhouette %.3f below 0.10 -> single speaker" % best_sil)
         return np.zeros(len(x), dtype=int), 1, best_sil
     return best_lab, best_k, best_sil
+
+
+# ---------------------------------------------------------------- voiceprints
+
+def speaker_centroids(embs, names):
+    """One voiceprint per cluster, for matching against the speaker library.
+
+    In the RAW embedding space, deliberately not the centred space pick_labels
+    clusters in. Centring subtracts *this recording's* own mean, so those
+    coordinates only mean anything inside this one file -- measured across
+    EP01/EP02 the same man's centred vectors score -0.305 and 0.324 against each
+    other, the sign itself flips. Raw, that pair scores 0.871 while the other
+    speaker scores 0.347, and the per-window distributions do not even overlap.
+
+    Averaging is what buys that margin: a centroid pools ~1.5h of speech, so the
+    room, the mic and the mood average out in a way no single window can.
+    """
+    import numpy as np
+    x = embs / (np.linalg.norm(embs, axis=1, keepdims=True) + 1e-9)
+    out = {}
+    for n in sorted(set(names)):
+        pick = np.asarray([m == n for m in names])
+        c = x[pick].mean(axis=0)
+        c = c / (np.linalg.norm(c) + 1e-9)
+        out[n] = [round(float(v), 6) for v in c]
+    return out
 
 
 # ---------------------------------------------------------------- segments
@@ -375,9 +407,17 @@ def cmd_diarize(ep, forced_k, max_k):
     doc["diarized_at"] = time.strftime("%Y-%m-%dT%H:%M:%S")
     tr_path.write_text(json.dumps(doc, ensure_ascii=False), encoding="utf-8")
 
-    # window-level detail, for spot-checking a suspicious stretch
+    # Window-level detail for spot-checking a suspicious stretch, plus the
+    # voiceprints. The centroids ride along here so the naming step can run on
+    # the laptop with nothing but numpy -- CAM++ and torch stay on the PC.
+    first = {}
+    for sg in segs:
+        first.setdefault(sg["speaker"], sg["start"])
     (STAGE_DIR / (ep + ".diar.json")).write_text(json.dumps(
         {"ep": ep, "model": MODEL, "k": k, "silhouette": sil,
+         "centroids": speaker_centroids(embs, names),
+         "speakers": {n: {"seconds": round(talk[n], 1), "first": first.get(n)}
+                      for n in sorted(talk)},
          "windows": [[round(w[0], 2), round(w[1], 2), n] for w, n in zip(windows, names)]},
         ensure_ascii=False), encoding="utf-8")
 
