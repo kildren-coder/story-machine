@@ -18,7 +18,8 @@
 
 红线相关：本脚本只做听写，不做任何摘要、改写、纠错。转写配置是 SPEC §4 阶段0
 冻结的那一套（large-v3 / float16 / batched bs16 / VAD 开 / word_timestamps / zh），
-不要在这里"调优"。
+不要在这里"调优"。唯一的后处理是繁→简逐字归一（见 to_simplified 的注释），它不碰
+解码参数、不改词，只统一字形。
 """
 
 import argparse
@@ -197,6 +198,51 @@ def setup_cuda_dlls():
     os.environ.pop("HF_ENDPOINT", None)
 
 
+_T2S = None
+_T2S_CHAR = {}
+
+
+def load_t2s():
+    """加载繁→简字表。转写前先调一次：缺依赖要当场炸，别等 1.5 小时之后。"""
+    global _T2S
+    if _T2S is None:
+        try:
+            import opencc
+        except ImportError:
+            fail("opencc missing in venv: pip install opencc-python-reimplemented")
+        _T2S = opencc.OpenCC("t2s")
+    return _T2S
+
+
+def to_simplified(text):
+    """繁体字形归一成简体。
+
+    Whisper 的中文词表里 `這` 和 `这` 是两个不同的 token，没有独立的字形选择
+    环节。训练语料中台港来源的音频配的是繁体字幕、大陆来源的配简体，于是模型
+    把「听起来像哪边的人」学成了字形先验：同一场直播，主播出简体、台湾口音的
+    嘉宾出繁体（EP02 实测嘉宾 72.8% 繁）。已验证与用词无关（他自己的繁体段和
+    简体段功能词频率相同，且零台式词汇），也与信道无关（把主播 EQ 成嘉宾的频谱
+    后繁体占比纹丝不动，仍是 0.0%）。
+
+    字形是解码器的产物，说话人没有「写」过任何字——所以这里没有原档要保，直接
+    原地归一。不用 initial_prompt 那条路：实测提示词能把字形彻底掰过去，但同时
+    会诱发标点、且逆着先验推时掉字（主播加繁体提示掉了 29% 的字），那是在改听写
+    结果本身，撞红线。
+
+    只做**逐字**转换，绝不用 tw2sp 之类词汇表：那会把「影片」改成「视频」、
+    「網路」改成「网络」，属于改写原话。逐字表还保证
+    convert(a + b) == convert(a) + convert(b)，所以 words.json 的词和
+    transcript.json 的整段无论怎么重新拼接都一致（check_diar.py 依赖这条）。
+    """
+    cc = load_t2s()
+    buf = []
+    for ch in text:
+        if ch not in _T2S_CHAR:
+            _T2S_CHAR[ch] = cc.convert(ch)
+        buf.append(_T2S_CHAR[ch])
+    return "".join(buf)
+
+
 def load_hotwords(model):
     """读 hotwords.json（多字词列表）。超 223 token 上限时截断并告警，绝不静默丢弃。"""
     if not HOTWORDS.exists():
@@ -239,6 +285,7 @@ def cmd_transcribe(ep):
     audio = max(cands, key=lambda p: p.stat().st_mtime)
     info("audio=" + audio.name)
 
+    load_t2s()          # 依赖缺失就在这里炸，别转写完了才发现写不出简体
     setup_cuda_dlls()
     from faster_whisper import WhisperModel, BatchedInferencePipeline
 
@@ -261,15 +308,19 @@ def cmd_transcribe(ep):
 
     segments, words_side = [], []
     last_tick = 0.0
+    n_t2s = 0
     for s in segs:
+        text = to_simplified(s.text)
+        n_t2s += sum(1 for a, b in zip(s.text, text) if a != b)
         segments.append({
             "start": round(s.start, 2),
             "end": round(s.end, 2),
             "speaker": None,          # 说话人分离未跑；槽位留着，补跑时原地填
-            "text": s.text,
+            "text": text,
         })
         if s.words:
-            words_side.append([[round(w.start, 2), round(w.end, 2), w.word] for w in s.words])
+            words_side.append([[round(w.start, 2), round(w.end, 2), to_simplified(w.word)]
+                               for w in s.words])
         else:
             words_side.append([])
         if s.end - last_tick >= 30:
@@ -285,6 +336,8 @@ def cmd_transcribe(ep):
         "config": "float16 batched bs16 vad word_ts zh"
                   + (" hotwords" if hotwords else ""),
         "diarization": "pending",     # 显式标记：不是忘了，是这一步还没跑
+        "orthography": "opencc t2s 逐字",   # 缺这个字段 = 这一集早于字形归一，别信它的字形
+        "orthography_chars": n_t2s,
         "transcribed_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
         "load_s": round(t_load, 1),
         "transcribe_s": round(t_run, 1),
@@ -300,8 +353,8 @@ def cmd_transcribe(ep):
         json.dumps({"ep": ep, "segments": words_side}, ensure_ascii=False),
         encoding="utf-8")
 
-    info("segments=%d  %.1fmin in %.0fs (%.1fx realtime)"
-         % (len(segments), total / 60, t_run, total / t_run if t_run else 0))
+    info("segments=%d  %.1fmin in %.0fs (%.1fx realtime)  t2s=%d chars"
+         % (len(segments), total / 60, t_run, total / t_run if t_run else 0, n_t2s))
     out("PROGRESS", "%.1f" % total, "%.1f" % total)
 
 

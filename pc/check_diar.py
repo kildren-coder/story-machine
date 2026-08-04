@@ -11,11 +11,12 @@
 # （EP01 的「战斗机中国」变成「战斗中国…机」）。两处都不报错、都只差几个字，
 # 靠眼睛永远看不出来。所以这个核对必须是机械的，且每次改分离逻辑都要跑。
 #
-# 查四件事：
+# 查五件事：
 #   1. words.json 原序拼接 == 分离前逐字稿          （ASR 自身一致）
 #   2. 分离后各段拼接      == 分离前逐字稿          （分离没增没删没换位）
 #   3. 每个词恰好被一个窗口覆盖                     （没有词悄悄漏掉）
 #   4. 分离后段的时间戳单调                         （跳播依赖它）
+#   5. orthography 字段在场                         （字形归一确实跑过）
 # 比对时忽略空白：重新分段必然改变空格落点，非空白字符序列则一个都不许变。
 
 import io
@@ -113,6 +114,14 @@ def check(ep):
         print(f"  ✗ 时间戳回退，前几处下标 {back[:5]}")
     else:
         print("  ✓ 时间戳单调")
+
+    # 5：字形归一。不在这里数繁体字（那要 opencc，本脚本坚持只用标准库），只查
+    # 归一步骤是否跑过——真正的风险是这一步被绕过或漏掉，不是转换表本身出错。
+    if new.get("orthography"):
+        print(f"  ✓ 字形已归一（{new['orthography']}，改 {new.get('orthography_chars', '?')} 字）")
+    else:
+        ok = False
+        print("  ✗ 缺 orthography 字段：这一集早于繁→简归一，跑 pc/t2s_backfill.py 补")
 
     sw = sum(1 for i in range(1, len(segs))
              if segs[i].get("speaker") != segs[i - 1].get("speaker"))
