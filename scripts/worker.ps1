@@ -34,11 +34,15 @@ $EpisodesDir = Join-Path $Vault "10-Episodes"
 $RemoteStage = "E:/asr/staged"
 $RemotePy = "C:\asr\venv\Scripts\python.exe"
 $RemoteScript = "C:\asr\smpc.py"
+# 说话人分离要 torch，转写 venv 必须保持无 torch（SPEC 阶段0：独立 venv、纯 CPU）
+$RemoteDiarPy = "C:\asr\venv-diar\Scripts\python.exe"
+$RemoteDiarScript = "C:\asr\smdiar.py"
 
 # 阶段流转。键是「待办」，值是执行时的「进行中」标记与下一站。
 $FLOW = [ordered]@{
     '待下载'   = @{ Busy = '下载中';   Next = '待转写' }
-    '待转写'   = @{ Busy = '转写中';   Next = '待取回' }
+    '待转写'   = @{ Busy = '转写中';   Next = '待分离' }
+    '待分离'   = @{ Busy = '分离中';   Next = '待取回' }
     '待取回'   = @{ Busy = '取回中';   Next = '待建笔记' }
     '待建笔记' = @{ Busy = '建笔记中'; Next = '完成' }
 }
@@ -53,6 +57,9 @@ function Write-Log {
 
 function Read-Utf8Lines {
     param([string]$Path)
+    # 调用方一律 @(Read-Utf8Lines ...)：函数返回单元素数组时 PowerShell 会把它
+    # 拆成裸字符串，$lines.Count 于是在 StrictMode 下报「属性不存在」。
+    # 跟 Read-Queue 那个是同一个坑（见其注释），只有一行的文件才踩得到。
     return [System.IO.File]::ReadAllLines($Path, [System.Text.UTF8Encoding]::new($false))
 }
 
@@ -88,7 +95,7 @@ $FIELD_RE = '\[(?<k>[^\[\]:]+?)::\s*(?<v>[^\]]*)\]'
 
 function Read-Queue {
     if (-not (Test-Path $QueuePath)) { return @() }
-    $lines = Read-Utf8Lines $QueuePath
+    $lines = @(Read-Utf8Lines $QueuePath)
     $rows = @()
     for ($i = 0; $i -lt $lines.Count; $i++) {
         $m = [regex]::Match($lines[$i], $ROW_RE)
@@ -136,7 +143,7 @@ function Format-Row {
 function Save-Row {
     param($Row)
     $Row.Fields['更新'] = Get-Date -Format 'HH:mm:ss'
-    $lines = Read-Utf8Lines $QueuePath
+    $lines = @(Read-Utf8Lines $QueuePath)
     $lines[$Row.LineNo] = Format-Row $Row
     Write-Utf8Lines -Path $QueuePath -Lines $lines
 }
@@ -159,15 +166,17 @@ function Get-NextEp {
 
 function Invoke-Remote {
     <#
-      在 5070 上跑 smpc.py，逐行解析 ASCII 协议（PROGRESS / INFO / ERROR）。
+      在 5070 上跑 smpc.py / smdiar.py，逐行解析 ASCII 协议（PROGRESS / INFO / ERROR）。
       每收到进度就回写队列行，所以 Obsidian 侧能看到动。
     #>
     param(
         [string[]]$RemoteArgs,     # 不能叫 $Args——那是 PowerShell 的自动变量，会被静默吞掉
         $Row,
-        [string]$Unit = 'pct'      # pct | sec
+        [string]$Unit = 'pct',     # pct | sec
+        [string]$Py = $RemotePy,   # 分离步走另一个 venv
+        [string]$Script = $RemoteScript
     )
-    $remote = "$RemotePy $RemoteScript " + ($RemoteArgs -join ' ')
+    $remote = "$Py $Script " + ($RemoteArgs -join ' ')
     Write-Log "  → ssh $Host5070 : $($RemoteArgs -join ' ')" DarkGray
 
     # ForEach-Object 的脚本块是子作用域，里面给变量赋值传不出来；
@@ -250,6 +259,13 @@ function Step-Transcribe {
     Write-Log "  ✓ 转写完成" Green
 }
 
+function Step-Diarize {
+    param($Row)
+    Invoke-Remote -RemoteArgs @('--ep', $Row.Fields['ep']) -Row $Row -Unit pct `
+        -Py $RemoteDiarPy -Script $RemoteDiarScript
+    Write-Log "  ✓ 说话人分离完成" Green
+}
+
 function Step-Fetch {
     param($Row)
     $ep = $Row.Fields['ep']
@@ -257,6 +273,13 @@ function Step-Fetch {
 
     Copy-FromPc -RemoteFile "$ep.transcript.json" -LocalPath (Join-Path $AssetsDir "$ep.transcript.json")
     Write-Log "  ✓ 逐字稿正本已落 _assets/" Green
+    # 窗口级分离明细，抽查某一段归属存疑时看它
+    Copy-FromPc -RemoteFile "$ep.diar.json" -LocalPath (Join-Path $AssetsDir "$ep.diar.json")
+    # 分离前的逐字稿 + 词级时间戳。留着才能机械核对「分离只改了分段和 speaker，
+    # 一个字没动」——「ASR 只听写」这条红线要能被查，就得有个 before 和一份词表。
+    # 见 pc/check_diar.py。
+    Copy-FromPc -RemoteFile "$ep.transcript.nodiar.json" -LocalPath (Join-Path $AssetsDir "$ep.transcript.nodiar.json")
+    Copy-FromPc -RemoteFile "$ep.words.json" -LocalPath (Join-Path $AssetsDir "$ep.words.json")
 
     # 音频扩展名以 meta 为准（一般是 m4a）
     $metaLocal = Join-Path $env:TEMP "$ep.meta.json"
@@ -265,13 +288,71 @@ function Step-Fetch {
     $ext = [System.IO.Path]::GetExtension($meta.audio_file)
     if (-not $ext) { $ext = '.m4a' }
 
-    $Row.Fields['进度'] = '音频传输中…'
-    Save-Row $Row
-    Copy-FromPc -RemoteFile "$ep$ext" -LocalPath (Join-Path $AssetsDir "$ep$ext")
+    # 音频是一次性产物：EP 与 B 站稿件一一对应，不会变。重跑分离后再取回时
+    # 没必要再拉一遍 100MB，只在本地缺失或字节数对不上（上次传一半断了）时才拷。
+    $audioLocal = Join-Path $AssetsDir "$ep$ext"
+    $haveAudio = (Test-Path $audioLocal) -and $meta.audio_bytes -and
+                 ((Get-Item $audioLocal).Length -eq $meta.audio_bytes)
+    if ($haveAudio) {
+        Write-Log "  · 音频本地已完整，跳过传输" DarkGray
+    }
+    else {
+        $Row.Fields['进度'] = '音频传输中…'
+        Save-Row $Row
+        Copy-FromPc -RemoteFile "$ep$ext" -LocalPath $audioLocal
+    }
     Copy-FromPc -RemoteFile "$ep.meta.json" -LocalPath (Join-Path $AssetsDir "$ep.meta.json")
 
-    $mb = (Get-Item (Join-Path $AssetsDir "$ep$ext")).Length / 1MB
+    $mb = (Get-Item $audioLocal).Length / 1MB
     Write-Log ("  ✓ 音频已落 _assets/ ({0:N1} MB)" -f $mb) Green
+}
+
+# 点名要快，人才会真去点。所以笔记里给一张说话人小表：各自说了多久、占比多少、
+# 第一次出现在哪。那个时间戳会被 story-machine-timestamps 变成跳播按钮（ADR 0001），
+# 于是「这是谁」只要点一下听两句就有答案，不用去逐字稿里翻。
+# 用注释标记围起来，是为了补跑分离后能原地重写而不碰人写的任何东西。
+$SpkBegin = '<!-- speakers:auto -->'
+$SpkEnd = '<!-- /speakers -->'
+
+function Get-SpeakerBlock {
+    param($Tr)
+    $order = @(); $secs = @{}; $first = @{}
+    foreach ($s in @($Tr.segments)) {
+        if (-not $s.speaker) { continue }
+        if (-not $secs.ContainsKey($s.speaker)) {
+            $order += $s.speaker; $secs[$s.speaker] = 0.0; $first[$s.speaker] = $s.start
+        }
+        $secs[$s.speaker] += ($s.end - $s.start)
+    }
+    if ($order.Count -lt 1) { return @() }
+    $total = ($secs.Values | Measure-Object -Sum).Sum
+    $block = @($SpkBegin, '> [!question]- 说话人待点名（本块由 worker 重写，别在标记之间写东西）')
+    foreach ($n in $order) {
+        $block += ('> - `{0}` 说了 {1}（{2:P0}），首次出现 {3}' -f `
+                $n, (ConvertTo-Hms $secs[$n]), ($secs[$n] / $total), (ConvertTo-Hms $first[$n]))
+    }
+    return $block + @($SpkEnd, '')
+}
+
+function Update-SpeakerBlock {
+    param([string[]]$Lines, [string[]]$Block)
+    if (-not $Block.Count) { return @{ Lines = $Lines; Changed = $false } }
+    $b = [array]::IndexOf($Lines, $SpkBegin)
+    $e = [array]::IndexOf($Lines, $SpkEnd)
+    if ($b -ge 0 -and $e -gt $b) {
+        $old = $Lines[$b..$e]
+        if (($old -join "`n") -eq (($Block[0..($Block.Count - 2)]) -join "`n")) {
+            return @{ Lines = $Lines; Changed = $false }
+        }
+        $head = if ($b -gt 0) { @($Lines[0..($b - 1)]) } else { @() }
+        $tail = if ($e -lt $Lines.Count - 1) { @($Lines[($e + 1)..($Lines.Count - 1)]) } else { @() }
+        return @{ Lines = $head + $Block[0..($Block.Count - 2)] + $tail; Changed = $true }
+    }
+    # 老笔记还没有这一块：插在「## 断言」前面，够不着就补在末尾
+    $at = [array]::IndexOf($Lines, '## 断言')
+    if ($at -lt 0) { return @{ Lines = @($Lines) + @('') + $Block; Changed = $true } }
+    $head = if ($at -gt 0) { @($Lines[0..($at - 1)]) } else { @() }
+    return @{ Lines = $head + $Block + @($Lines[$at..($Lines.Count - 1)]); Changed = $true }
 }
 
 function Step-Scaffold {
@@ -306,7 +387,35 @@ function Step-Scaffold {
     $notePath = Join-Path $EpisodesDir "$ep $safe.md"
 
     if (Test-Path $notePath) {
-        Write-Log "  ! EP 笔记已存在，跳过不覆盖：$([System.IO.Path]::GetFileName($notePath))" Yellow
+        # 整体跳过会让 frontmatter 停留在旧正本上——补跑说话人分离后，
+        # 笔记会一直写着「说话人分离: pending」。只同步跟正本挂钩的那几行，
+        # 人手填的（主播/嘉宾/播出日期）和正文一律不碰。
+        $sync = @{
+            '转写引擎'     = "$($tr.engine)"
+            '说话人分离'   = "$($tr.diarization)"
+        }
+        $lines = @(Read-Utf8Lines $notePath)
+        $hits = 0
+        for ($i = 0; $i -lt $lines.Count; $i++) {
+            if ($lines[$i] -eq '---' -and $i -gt 0) { break }      # frontmatter 结束
+            foreach ($k in $sync.Keys) {
+                if ($lines[$i] -match "^$k`:\s*(.*)$" -and $Matches[1] -ne $sync[$k]) {
+                    $lines[$i] = "$k`: $($sync[$k])"
+                    $hits++
+                }
+            }
+        }
+        $upd = Update-SpeakerBlock -Lines $lines -Block (Get-SpeakerBlock $tr)
+        $lines = $upd.Lines
+        if ($hits -or $upd.Changed) {
+            Write-Utf8Lines -Path $notePath -Lines $lines
+            $what = @()
+            if ($hits) { $what += "$hits 个 frontmatter 字段" }
+            if ($upd.Changed) { $what += '说话人小表' }
+            Write-Log "  ✓ EP 笔记已存在，更新了$($what -join '、')（其余正文未动）" Green
+        } else {
+            Write-Log "  · EP 笔记已存在且元数据一致，未改动" DarkGray
+        }
         return
     }
 
@@ -350,7 +459,7 @@ function Step-Scaffold {
         '> 断言行由阶段 2 抽取、阶段 3 人工审核后落到下面。**现在是空的，这是正常的。**'
         '> 逐字稿正本在 `_assets/`，永不要求通读。'
         ''
-    ) + $srcBlock + @(
+    ) + $srcBlock + (Get-SpeakerBlock $tr) + @(
         '## 断言'
         ''
         '## 待办'
@@ -367,6 +476,7 @@ function Step-Scaffold {
 $STEPS = @{
     '待下载'   = ${function:Step-Download}
     '待转写'   = ${function:Step-Transcribe}
+    '待分离'   = ${function:Step-Diarize}
     '待取回'   = ${function:Step-Fetch}
     '待建笔记' = ${function:Step-Scaffold}
 }

@@ -18,10 +18,10 @@ const { Plugin, MarkdownRenderChild, Notice, TFile, normalizePath } = require("o
 const ROW_RE = /^(\s*)-\s+(https?:\/\/\S+)(.*)$/;
 const FIELD_RE = /\[([^\[\]:]+?)::\s*([^\]]*)\]/g;
 
-const BUSY = ["下载中", "转写中", "取回中", "建笔记中"];
+const BUSY = ["下载中", "转写中", "分离中", "取回中", "建笔记中"];
 const STAGE_CLASS = {
-  待下载: "wait", 待转写: "wait", 待取回: "wait", 待建笔记: "wait",
-  下载中: "busy", 转写中: "busy", 取回中: "busy", 建笔记中: "busy",
+  待下载: "wait", 待转写: "wait", 待分离: "wait", 待取回: "wait", 待建笔记: "wait",
+  下载中: "busy", 转写中: "busy", 分离中: "busy", 取回中: "busy", 建笔记中: "busy",
   完成: "done", 失败: "fail",
 };
 
