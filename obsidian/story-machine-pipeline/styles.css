@@ -126,6 +126,73 @@
   color: var(--text-on-accent);
 }
 
+.sm-pipe-next {
+  font-size: 0.8em;
+  color: var(--text-muted);
+  margin-top: 5px;
+}
+
+.sm-pipe-link {
+  cursor: pointer;
+  color: var(--text-accent);
+}
+
+/* ---------------------------------------------------------- EP 笔记状态条 */
+
+.sm-ep {
+  border: 1px solid var(--background-modifier-border);
+  border-left: 3px solid var(--interactive-accent);
+  border-radius: 6px;
+  padding: 8px 12px;
+  background: var(--background-secondary);
+}
+
+.sm-ep-chain {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 5px;
+  font-size: 0.8em;
+}
+
+.sm-ep-step {
+  color: var(--text-faint);
+  white-space: nowrap;
+}
+
+.sm-ep-step.is-done { color: var(--color-green); }
+
+.sm-ep-step.is-now {
+  color: var(--text-on-accent);
+  background: var(--interactive-accent);
+  border-radius: 9px;
+  padding: 1px 8px;
+  font-weight: 600;
+}
+
+/* 还没实现的阶段用虚线下划线标出来——「没做」和「没轮到」对人是两回事 */
+.sm-ep-step.is-todo {
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+}
+
+.sm-ep-sep { color: var(--text-faint); }
+
+.sm-ep-now {
+  font-size: 0.85em;
+  color: var(--text-normal);
+  margin-top: 7px;
+  line-height: 1.5;
+}
+
+.sm-ep-act:not(:empty) { margin-top: 8px; }
+
+.sm-ep-hint {
+  font-size: 0.78em;
+  color: var(--text-faint);
+  margin-left: 6px;
+}
+
 .sm-pipe-log {
   margin-top: 10px;
   max-height: 220px;

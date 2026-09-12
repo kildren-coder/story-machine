@@ -28,6 +28,11 @@ import sys
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 from smdiar import build_windows                                   # noqa: E402
 
+# Windows 控制台默认 GBK，打印 ✓ 会直接 UnicodeEncodeError 崩掉——而且是在
+# 逐项核对**全部通过之后**崩，看上去像红线没守住，实际只是打印不出那个勾。
+# 核对工具自己把结论弄丢是最不该发生的事。同 speakers.py 的处理。
+sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+
 ASSETS = pathlib.Path(r"D:\obsidian-task\任务栏\story-machine\_assets")
 
 

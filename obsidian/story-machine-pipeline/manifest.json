@@ -1,9 +1,9 @@
 {
   "id": "story-machine-pipeline",
   "name": "story-machine 流水线控制台",
-  "version": "0.1.0",
+  "version": "0.3.0",
   "minAppVersion": "1.4.0",
-  "description": "在笔记里粘 B 站链接入队，一键跑「下载 → 转写 → 取回 → 建 EP 笔记」，进度直接看。",
+  "description": "控制台里粘 B 站链接入队、一键跑阶段 0；每篇 EP 笔记顶上一条状态条，写明这一集卡在哪一阶段、下一步点什么——点名入库和阶段 1–2 抽取都是就地一个按钮。",
   "author": "kildren",
   "isDesktopOnly": true
 }

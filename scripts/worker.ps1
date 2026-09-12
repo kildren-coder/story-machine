@@ -3,8 +3,10 @@
 # 用法：
 #   .\scripts\worker.ps1                 处理完队列里所有待办就退出（单发）
 #   .\scripts\worker.ps1 -Watch          常驻，每 5 秒扫一次队列笔记
-#   .\scripts\worker.ps1 -Reset EP02     把某一集打回「待下载」重跑
+#   .\scripts\worker.ps1 -Retry EP02     失败后接着**摔倒的那一步**重跑（常用）
+#   .\scripts\worker.ps1 -Reset EP02     打回「待下载」整条重来（少用，会白扔转写）
 #   .\scripts\worker.ps1 -Name EP02      只跑这一集的点名回填（不碰队列）
+#   .\scripts\worker.ps1 -Extract EP02   只跑这一集的阶段 1–2 抽取（+ -Redo 覆盖已有草稿）
 #
 # 设计：**队列笔记是状态机，本脚本是执行器。**
 #   状态全部落在 `_pipeline/队列.md` 的括号式 inline field 里，所以
@@ -20,7 +22,10 @@ param(
     [switch]$Watch,
     [int]$PollSeconds = 5,
     [string]$Reset,
-    [string]$Name          # 只跑某一集的点名回填，不碰队列
+    [string]$Retry,        # 打回**失败的那一步**重跑（对比 -Reset：那是整条重来）
+    [string]$Name,         # 只跑某一集的点名回填，不碰队列
+    [string]$Extract,      # 只跑某一集的阶段 1–2 抽取（转交 scripts\stage12.py）
+    [switch]$Redo          # 配 -Extract：草稿已存在也重跑（会覆盖）
 )
 
 $ErrorActionPreference = 'Stop'
@@ -42,6 +47,11 @@ $RemoteDiarScript = "C:\asr\smdiar.py"
 # 声纹比对在本机跑：质心随 EP{n}.diar.json 回来了，只要 numpy
 $LocalPy = "python"
 $SpeakersScript = Join-Path (Split-Path $PSScriptRoot -Parent) "pc\speakers.py"
+# 阶段 1–2 也在本机跑：它调的是无头 Claude Code，走的是笔记本上的订阅额度
+$Stage12Script = Join-Path $PSScriptRoot "stage12.py"
+# 取回走 sftp（要续传，见 Copy-FromPc）。用绝对路径起进程，省得依赖 PATH。
+$SftpExe = (Get-Command sftp -ErrorAction SilentlyContinue).Source
+if (-not $SftpExe) { $SftpExe = 'C:\Windows\System32\OpenSSH\sftp.exe' }
 
 # 阶段流转。键是「待办」，值是执行时的「进行中」标记与下一站。
 $FLOW = [ordered]@{
@@ -51,7 +61,7 @@ $FLOW = [ordered]@{
     '待取回'   = @{ Busy = '取回中';   Next = '待建笔记' }
     '待建笔记' = @{ Busy = '建笔记中'; Next = '完成' }
 }
-$FIELD_ORDER = @('ep', '标题', '阶段', '进度', '时长', '更新', '备注', '错误')
+$FIELD_ORDER = @('ep', '标题', '阶段', '进度', '时长', '更新', '备注', '失败于', '错误')
 
 # ---------------------------------------------------------------- 基础工具
 
@@ -223,18 +233,114 @@ function Invoke-Remote {
     }
 }
 
+# 取回的暂存区：**先下到 vault 外面的 ASCII 目录，传完整了才搬进 _assets/。**
+# 三个理由，都踩过：
+#   (a) 半截文件绝不能出现在 _assets/——Obsidian 和时间戳插件都照文件名认音频，
+#       一个 1.1MB 的断头 m4a 看上去跟好的一模一样（2026-08-11 EP03 就在库里躺着）；
+#   (b) 断点续传要有个稳定的落脚点，重试才能接着上次的字节数下；
+#   (c) sftp 的批处理脚本里塞中文路径（vault 在「任务栏」下）不可靠，ASCII 没这问题。
+$FetchTmp = Join-Path $env:TEMP 'sm-fetch'
+
 function Copy-FromPc {
-    param([string]$RemoteFile, [string]$LocalPath)
+    <#
+      从 PC 取一个文件。
+
+      用 sftp 的 reget 而不是 scp：**scp 没有续传**，断在 22/23 MB 也得从 0 重来。
+      reget 从本地已有的字节数接着下（实测把文件截断到 5000 字节再续传，
+      sha256 与完整文件一致）。
+
+      配合 ssh config 里的 ServerAliveInterval，断链的表现从「永远挂着」变成
+      「约 60 秒内报错 → 重试接着传」。EP03 那次是直连路径死了退化成 DERP，
+      scp 进程 CPU 0.00 躺了十分钟，队列上只有一行不动的「音频传输中…」。
+    #>
+    param(
+        [string]$RemoteFile,
+        [string]$LocalPath,
+        $Row,                      # 给了就把进度写回队列，让人看得见它在动
+        [long]$ExpectBytes = 0,    # 知道该多大就校验，顺便算百分比
+        [int]$Retries = 3
+    )
     $null = New-Item -ItemType Directory -Force (Split-Path $LocalPath)
-    $prevEap = $ErrorActionPreference
-    $ErrorActionPreference = 'Continue'
-    try {
-        $out = & scp -q "${Host5070}:$RemoteStage/$RemoteFile" $LocalPath 2>&1
-        $rc = $LASTEXITCODE
+    $null = New-Item -ItemType Directory -Force $FetchTmp
+    $tmp = Join-Path $FetchTmp $RemoteFile
+    $batch = Join-Path $FetchTmp 'batch.txt'
+    $logOut = Join-Path $FetchTmp 'sftp.out'
+    $logErr = Join-Path $FetchTmp 'sftp.err'
+
+    # 暂存区里剩的比该有的还大 = 上一轮留下的脏文件，reget 只会往后接，永远对不上
+    if ($ExpectBytes -gt 0 -and (Test-Path $tmp) -and (Get-Item $tmp).Length -gt $ExpectBytes) {
+        Remove-Item $tmp -Force
     }
-    finally { $ErrorActionPreference = $prevEap }
-    if ($rc -ne 0) { throw "scp 取回失败（$RemoteFile）：$($out -join ' ')" }
-    if (-not (Test-Path $LocalPath)) { throw "scp 报成功但本地没有文件：$LocalPath" }
+
+    # 远端路径必须带前导斜杠。`E:/asr/staged/x` 会被当成相对家目录的路径，
+    # 解析成 `/C:/Users/admin/E:/asr/staged/x` 然后报 not found。
+    [System.IO.File]::WriteAllText($batch,
+        "reget `"/$RemoteStage/$RemoteFile`" `"$($tmp -replace '\\', '/')`"`n",
+        [System.Text.ASCIIEncoding]::new())
+
+    $err = ''
+    for ($try = 1; $try -le $Retries; $try++) {
+        $had = if (Test-Path $tmp) { (Get-Item $tmp).Length } else { 0 }
+        if ($try -gt 1) {
+            Write-Log ("  · 重试 {0}/{1}（已有 {2:N1} MB，接着下）" -f $try, $Retries, ($had / 1MB)) DarkYellow
+        }
+        # **不能用 Start-Process -PassThru。** worker 跑在 powershell.exe 5.1 下，
+        # 那里返回的 Process 对象拿不到句柄，`$p.ExitCode` 是空的——于是
+        # `$p.ExitCode -eq 0` 恒为假，明明下载成功也被判成失败重试三轮然后抛错。
+        # （pwsh 7 里它是好的，所以手测发现不了。）直接用 .NET 的 Process 才可靠。
+        $psi = New-Object System.Diagnostics.ProcessStartInfo
+        $psi.FileName = $SftpExe
+        # .NET Framework 4.8 没有 ArgumentList，只能拼字符串，所以路径要自己加引号
+        $psi.Arguments = '-q -b "{0}" {1}' -f $batch, $Host5070
+        $psi.UseShellExecute = $false
+        $psi.RedirectStandardOutput = $true
+        $psi.RedirectStandardError = $true
+        $psi.CreateNoWindow = $true
+        $p = [System.Diagnostics.Process]::Start($psi)
+        # 管道要一直抽干，写满了子进程会卡在写 stdout 上（输出很小，异步读到底即可）
+        $so = $p.StandardOutput.ReadToEndAsync()
+        $se = $p.StandardError.ReadToEndAsync()
+
+        # 进度靠轮询暂存文件的大小——sftp 自带的进度条是给终端画的（\r 覆盖行），
+        # 解析它不如直接看文件长到哪了，而且这样连「一动不动」都看得出来。
+        $last = [datetime]::MinValue
+        while (-not $p.HasExited) {
+            Start-Sleep -Milliseconds 400
+            if (-not $Row -or $ExpectBytes -le 0) { continue }
+            if (([datetime]::Now - $last).TotalSeconds -lt 2) { continue }
+            $last = [datetime]::Now
+            $now = if (Test-Path $tmp) { (Get-Item $tmp).Length } else { 0 }
+            $Row.Fields['进度'] = '{0}% ({1:N1}/{2:N1} MB)' -f `
+                [int](100 * $now / $ExpectBytes), ($now / 1MB), ($ExpectBytes / 1MB)
+            Save-Row $Row
+        }
+        $p.WaitForExit()
+        $rc = $p.ExitCode
+        $log = (("$($so.Result) $($se.Result)") -replace '\s+', ' ').Trim()
+        [System.IO.File]::WriteAllText($logOut, $log)   # 留一份给事后翻
+
+        if ($rc -eq 0 -and (Test-Path $tmp)) {
+            $got = (Get-Item $tmp).Length
+            if ($ExpectBytes -gt 0 -and $got -ne $ExpectBytes) {
+                $err = "字节数对不上：拿到 $got，应为 $ExpectBytes"
+            }
+            else {
+                # 跨盘 Move 是「拷贝再删」，中途 _assets/ 里会短暂出现半截文件。
+                # 先落 .part（插件不认这个后缀），再同盘改名——改名才是原子的。
+                $part = "$LocalPath.part"
+                Move-Item -LiteralPath $tmp -Destination $part -Force
+                Move-Item -LiteralPath $part -Destination $LocalPath -Force
+                return
+            }
+        }
+        else {
+            $err = if ($log) { $log } else { "sftp 退出码 $rc" }
+            # 远端压根没这个文件，重试三轮也变不出来
+            if ($err -match 'not found|No such file') { break }
+        }
+        if ($try -lt $Retries) { Start-Sleep -Seconds ([Math]::Min(15, 3 * $try)) }
+    }
+    throw "取回失败（$RemoteFile）：$err"
 }
 
 # ---------------------------------------------------------------- 四个阶段
@@ -296,15 +402,18 @@ function Step-Fetch {
     # 音频是一次性产物：EP 与 B 站稿件一一对应，不会变。重跑分离后再取回时
     # 没必要再拉一遍 100MB，只在本地缺失或字节数对不上（上次传一半断了）时才拷。
     $audioLocal = Join-Path $AssetsDir "$ep$ext"
-    $haveAudio = (Test-Path $audioLocal) -and $meta.audio_bytes -and
-                 ((Get-Item $audioLocal).Length -eq $meta.audio_bytes)
+    $expect = if ($meta.PSObject.Properties.Name -contains 'audio_bytes') { [long]$meta.audio_bytes } else { 0 }
+    $haveAudio = (Test-Path $audioLocal) -and $expect -and
+                 ((Get-Item $audioLocal).Length -eq $expect)
     if ($haveAudio) {
         Write-Log "  · 音频本地已完整，跳过传输" DarkGray
     }
     else {
-        $Row.Fields['进度'] = '音频传输中…'
-        Save-Row $Row
-        Copy-FromPc -RemoteFile "$ep$ext" -LocalPath $audioLocal
+        Write-Log ("  · 取音频 {0:N1} MB" -f ($expect / 1MB)) DarkGray
+        # 音频比其它文件大两个数量级，Tailscale 这条链路又常常传着传着就 Connection
+        # closed（EP03 实测 3 次重试只走到 15.2/23.1 MB）。重试是续传，每一轮都往前
+        # 推进，所以多给几次就是纯赚——反正断了也不会从头再来。
+        Copy-FromPc -RemoteFile "$ep$ext" -LocalPath $audioLocal -Row $Row -ExpectBytes $expect -Retries 12
     }
     Copy-FromPc -RemoteFile "$ep.meta.json" -LocalPath (Join-Path $AssetsDir "$ep.meta.json")
 
@@ -323,6 +432,7 @@ function Step-Fetch {
 $SpkBegin = '<!-- speakers:auto -->'
 $SpkEnd = '<!-- /speakers -->'
 $SPK_FIELD_RE = '\[(SPEAKER_\d+)::\s*([^\]]*)\]'
+$script:WarnedPairs = @{}
 
 function Read-SpeakerNames {
     param([string[]]$Lines)
@@ -365,7 +475,20 @@ function Resolve-Speakers {
     if ($rc -ne 0) { throw "声纹比对失败（$Ep）：$(($log -join ' ').Trim())" }
     foreach ($l in $log) { if ("$l" -match '^入库') { Write-Log "    $l" Green } }
     if (-not (Test-Path $outFile)) { throw "speakers.py 报成功但没写出 $outFile" }
-    return Get-Content $outFile -Raw -Encoding utf8 | ConvertFrom-Json
+    $res = Get-Content $outFile -Raw -Encoding utf8 | ConvertFrom-Json
+
+    # 声纹库体检。每个坏对只吼一次，否则 -Watch 模式下每 5 秒刷一遍屏。
+    if ($res.PSObject.Properties.Name -contains 'lib_risky') {
+        foreach ($pair in @($res.lib_risky)) {
+            $key = "$($pair[0])|$($pair[1])"
+            if ($script:WarnedPairs.ContainsKey($key)) { continue }
+            $script:WarnedPairs[$key] = $true
+            Write-Log ("  ⚠ 声纹库体检：{0} × {1} = {2:N3}（认定门槛 {3:N2}）——" -f `
+                    $pair[0], $pair[1], [double]$pair[2], [double]$res.threshold) Yellow
+            Write-Log "     跑 python pc\speakers.py --list 看详情" DarkYellow
+        }
+    }
+    return $res
 }
 
 function Get-SpeakerBlock {
@@ -383,6 +506,32 @@ function Get-SpeakerBlock {
         '> worker 下一轮入库，往后各集自动认出来。第一次登记可以连角色一起写：`历史哥 嘉宾`。'
         '> 认错了就直接改方括号里的字。本块由 worker 重写，方括号以外别写东西。'
     )
+
+    # 声纹库是全局的（不按节目/来源分），人越攒越多越容易撞脸，而认错是静默的——
+    # 笔记上只会写一个看起来很正常的名字。跟本集**无关**的坏对不在这里报，
+    # 只在你正要做归属判断的这一刻，提醒你这一位在库里有个像的。
+    # 「跟本集有关」要连候选人一起算。库脏到两人都像时，比对器会先一步把这个簇
+    # 判成 ambiguous、`name` 留空——只看 name 的话，正是最该报警的那一集反而不报。
+    $here = @{}
+    foreach ($p in $people) {
+        if ($p.name) { $here[$p.name] = $true }
+        foreach ($n in @($p.like)) { if ($n) { $here[$n] = $true } }
+    }
+    # 这里**不能**写 `$risky = if (…) { @($Res.lib_risky) } else { @() }`。
+    # if 当表达式用时结果要过一遍管道，外层数组会被拆掉一层，于是只有一对坏数据时
+    # foreach 迭代到的是「瓜哥」「老王」「0.978」三个标量而不是一个三元组，
+    # $pair[2] 变成对 Decimal 取下标。跟 Read-Queue 那个 `return , $rows` 同源。
+    $risky = @()
+    if ($Res.PSObject.Properties.Name -contains 'lib_risky') { $risky = $Res.lib_risky }
+    foreach ($pair in @($risky)) {
+        if (-not ($here.ContainsKey($pair[0]) -or $here.ContainsKey($pair[1]))) { continue }
+        $block += ('> ')
+        $block += ('> ⚠ **声纹库体检**：`{0}` 和 `{1}` 的声纹已经像到 {2:N3}（认定门槛 {3:N2}），本集出现了其中一位。' -f `
+                $pair[0], $pair[1], [double]$pair[2], [double]$Res.threshold)
+        $block += '> 下面那个名字值得点开听两句核一下。若是早先某一集点错了名、把两个人混进了同一个人名下，'
+        $block += '> 去那一集的小表改方括号即可（改一个字就是一次重新入库）。'
+    }
+
     foreach ($p in $people) {
         $pct = if ($total -gt 0) { '{0:P0}' -f ([double]$p.seconds / $total) } else { '—' }
         $len = ConvertTo-Hms $p.seconds
@@ -404,7 +553,25 @@ function Get-SpeakerBlock {
         $block += ('> - `{0}` **{1}** 说了 {2}（{3}），首次出现 {4} → 点名 [{0}:: ]{5}' -f `
                 $p.speaker, $p.unknown, $len, $pct, $when, $warn)
     }
-    return $block + @($SpkEnd, '')
+    return $block + @($SpkEnd)
+}
+
+# 笔记顶上的状态条。插件把这个代码块渲染成「现在在哪一阶段 + 下一步按钮」，
+# 免得人点开一集只看见一份空笔记，还得回控制台猜该干什么。
+# `worker:` 由脚本写自己的路径，仓库搬家后下一次 worker 跑过就自愈——
+# 不做插件设置项，是为了让「哪个 worker」这件事只有一个出处。
+$EpBegin = '<!-- ep:auto -->'
+$EpEnd = '<!-- /ep -->'
+
+function Get-EpBlock {
+    param([string]$Ep)
+    return @($EpBegin, '```sm-ep', "ep: $Ep", "worker: $PSCommandPath", '```', $EpEnd)
+}
+
+function Update-EpBlock {
+    param([string[]]$Lines, [string]$Ep)
+    return Update-MarkedBlock -Lines $Lines -Block (Get-EpBlock $Ep) -Begin $EpBegin -End $EpEnd `
+        -AnchorRe '^#\s' -Where After
 }
 
 function Format-YamlList {
@@ -412,6 +579,25 @@ function Format-YamlList {
     $xs = @($Items | Where-Object { $_ })
     if ($xs.Count -eq 0) { return '[]' }
     return '[' + (($xs | ForEach-Object { '"' + ($_ -replace '"', '\"') + '"' }) -join ', ') + ']'
+}
+
+function Get-FmValue {
+    <# 读 frontmatter 里某个键的现值，返回 @{ Text; Last }（Last = 该键最后占用的行号）。
+
+       **值不一定在键那一行上。** Obsidian 的属性面板一律把列表写成块状：
+           人物:
+             - 奇衡
+       人在属性面板里填过 `主播`/`嘉宾` 之后，磁盘上就是这个样子。 #>
+    param([string[]]$Lines, [int]$KeyLine, [int]$End, [string]$Inline)
+    $last = $KeyLine
+    $items = @()
+    for ($j = $KeyLine + 1; $j -lt $End; $j++) {
+        if ($Lines[$j] -notmatch '^\s+\S') { break }      # 不缩进 = 下一个键，续行到此为止
+        $last = $j
+        if ($Lines[$j] -match '^\s*-\s*(.*)$') { $items += $Matches[1].Trim() }
+    }
+    $text = if ($Inline.Trim() -ne '') { $Inline } else { $items -join ', ' }
+    return @{ Text = $text.Trim(); Last = $last }
 }
 
 function Set-Frontmatter {
@@ -424,32 +610,61 @@ function Set-Frontmatter {
     if ($end -lt 0) { return @{ Lines = $Lines; Changed = $false } }
 
     for ($i = 1; $i -lt $end; $i++) {
-        if ($Lines[$i] -match "^$([regex]::Escape($Key))\s*:\s*(.*)$") {
-            $cur = $Matches[1].Trim()
-            if ($OnlyIfEmpty -and $cur -ne '' -and $cur -ne '[]') {
-                return @{ Lines = $Lines; Changed = $false }
-            }
-            if ($cur -eq $Value) { return @{ Lines = $Lines; Changed = $false } }
-            $new = @($Lines)
-            $new[$i] = "$Key`: $Value"
-            return @{ Lines = $new; Changed = $true }
+        if ($Lines[$i] -notmatch "^$([regex]::Escape($Key))\s*:\s*(.*)$") { continue }
+        # 续行必须连读带删（见 Get-FmValue）。只认键行会同时踩两个坑：
+        #   (a) 块状列表被读成空值 → -OnlyIfEmpty 判定「人没填过」，
+        #       把人手填的 `主播:` 覆盖掉——那正是这个开关要防的事；
+        #   (b) 改写时只换键行，底下的 `  - 奇衡` 成了孤儿：
+        #           人物: ["奇衡"]
+        #             - 奇衡
+        #       这不是合法 YAML，Obsidian 整份 frontmatter 报废，
+        #       连带 Dataview 查不到这一集——而它一句话都不会报。
+        $cur = Get-FmValue -Lines $Lines -KeyLine $i -End $end -Inline $Matches[1]
+        if ($OnlyIfEmpty -and $cur.Text -ne '' -and $cur.Text -ne '[]') {
+            return @{ Lines = $Lines; Changed = $false }
         }
+        if ($cur.Last -eq $i -and $Lines[$i] -eq "$Key`: $Value") {
+            return @{ Lines = $Lines; Changed = $false }
+        }
+        # 这里**不能**写 `$head = if ($i -gt 0) { @($Lines[0..($i-1)]) } else { @() }`。
+        # if 当表达式用时结果要过一遍管道，单元素数组会被拆成裸字符串，于是后面的
+        # `$head + @(…)` 从「拼数组」变成了「拼字符串」——三行 frontmatter 被粘成
+        # 一行 `---主播: ["奇衡"]---`。只有键在第 1 行（$head 恰好一个元素）时才踩得到。
+        # 跟 Read-Queue 的 `return , $rows`、Get-SpeakerBlock 的 $risky 是同一个坑。
+        # 累加式没有这个问题：$out 一开始就是数组，`+=` 只会往里加元素。
+        $out = @()
+        if ($i -gt 0) { $out += $Lines[0..($i - 1)] }
+        $out += "$Key`: $Value"
+        $out += $Lines[($cur.Last + 1)..($Lines.Count - 1)]
+        return @{ Lines = $out; Changed = $true }
     }
-    $head = @($Lines[0..($end - 1)])
-    $tail = @($Lines[$end..($Lines.Count - 1)])
-    return @{ Lines = $head + @("$Key`: $Value") + $tail; Changed = $true }
+    $out = @()
+    $out += $Lines[0..($end - 1)]
+    $out += "$Key`: $Value"
+    $out += $Lines[$end..($Lines.Count - 1)]
+    return @{ Lines = $out; Changed = $true }
 }
 
 function Sync-EpisodeSpeakers {
-    <# 读笔记里人填的点名 → 入库 → 重写小表 + frontmatter。返回是否改动了文件。#>
+    <# 读笔记里人填的点名 → 入库 → 重写小表 + frontmatter，顺带保证状态条在。
+       返回是否改动了文件。#>
     param([string]$NotePath, [string]$Ep)
     $lines = @(Read-Utf8Lines $NotePath)
+
+    # 状态条不依赖声纹库，先写死在这儿——没有质心的老集数一样该有它
+    $upd = Update-EpBlock -Lines $lines -Ep $Ep
+    $lines = $upd.Lines
+    $changed = $upd.Changed
+
     $res = Resolve-Speakers -Ep $Ep -Names (Read-SpeakerNames $lines)
-    if ($null -eq $res) { return $false }
+    if ($null -eq $res) {
+        if ($changed) { Write-Utf8Lines -Path $NotePath -Lines $lines }
+        return $changed
+    }
 
     $upd = Update-SpeakerBlock -Lines $lines -Block (Get-SpeakerBlock $res)
     $lines = $upd.Lines
-    $changed = $upd.Changed
+    $changed = $changed -or $upd.Changed
 
     # `人物:` 归机器所有，永远重写——未知的也列进去（写成「未知1」），
     # 这样跨集查询一眼看得出哪几集还欠点名。
@@ -472,25 +687,69 @@ function Sync-EpisodeSpeakers {
     return $changed
 }
 
-function Update-SpeakerBlock {
-    param([string[]]$Lines, [string[]]$Block)
+function Update-MarkedBlock {
+    <#
+      把 `<!-- x -->` … `<!-- /x -->` 之间的内容原地换成 $Block（$Block 自带首尾标记）。
+      区段还不存在就按 $AnchorRe / $Where 插进去，锚点也找不着才补在末尾。
+
+      幂等是硬要求：内容没变必须报 Changed=$false。否则 -Watch 每轮都重写文件，
+      Obsidian 每 5 秒重载一次笔记，人正在里面打字就会被打断。
+      空行留在标记**外面**，这样替换路径只需逐字比对标记之间的部分。
+    #>
+    param(
+        [string[]]$Lines,
+        [string[]]$Block,
+        [string]$Begin,
+        [string]$End,
+        [string]$AnchorRe,
+        [ValidateSet('Before', 'After')][string]$Where = 'Before'
+    )
     if (-not $Block.Count) { return @{ Lines = $Lines; Changed = $false } }
-    $b = [array]::IndexOf($Lines, $SpkBegin)
-    $e = [array]::IndexOf($Lines, $SpkEnd)
+
+    # 全程累加式建数组。`$x = if (…) { @(…) } else { @() }` 会在单元素时被管道
+    # 拆成裸字符串，后面的 `+` 就成了字符串拼接（详见 Set-Frontmatter 里的长注释）。
+    $b = [array]::IndexOf($Lines, $Begin)
+    $e = [array]::IndexOf($Lines, $End)
     if ($b -ge 0 -and $e -gt $b) {
-        $old = $Lines[$b..$e]
-        if (($old -join "`n") -eq (($Block[0..($Block.Count - 2)]) -join "`n")) {
+        if ((@($Lines[$b..$e]) -join "`n") -eq ($Block -join "`n")) {
             return @{ Lines = $Lines; Changed = $false }
         }
-        $head = if ($b -gt 0) { @($Lines[0..($b - 1)]) } else { @() }
-        $tail = if ($e -lt $Lines.Count - 1) { @($Lines[($e + 1)..($Lines.Count - 1)]) } else { @() }
-        return @{ Lines = $head + $Block[0..($Block.Count - 2)] + $tail; Changed = $true }
+        $out = @()
+        if ($b -gt 0) { $out += $Lines[0..($b - 1)] }
+        $out += $Block
+        if ($e -lt $Lines.Count - 1) { $out += $Lines[($e + 1)..($Lines.Count - 1)] }
+        return @{ Lines = $out; Changed = $true }
     }
-    # 老笔记还没有这一块：插在「## 断言」前面，够不着就补在末尾
-    $at = [array]::IndexOf($Lines, '## 断言')
-    if ($at -lt 0) { return @{ Lines = @($Lines) + @('') + $Block; Changed = $true } }
-    $head = if ($at -gt 0) { @($Lines[0..($at - 1)]) } else { @() }
-    return @{ Lines = $head + $Block + @($Lines[$at..($Lines.Count - 1)]); Changed = $true }
+
+    $at = -1
+    for ($i = 0; $i -lt $Lines.Count; $i++) {
+        if ($Lines[$i] -match $AnchorRe) {
+            $at = if ($Where -eq 'After') { $i + 1 } else { $i }
+            break
+        }
+    }
+    if ($at -lt 0) {
+        $out = @($Lines)
+        if ($out.Count -and $out[-1] -ne '') { $out += '' }
+        $out += $Block
+        return @{ Lines = $out; Changed = $true }
+    }
+    # 空行只在两边还没有空行时才补——否则每插一次就多攒一行空白
+    $out = @()
+    if ($at -gt 0) { $out += $Lines[0..($at - 1)] }
+    if ($out.Count -and $out[-1] -ne '') { $out += '' }
+    $out += $Block
+    if ($at -lt $Lines.Count) {
+        if ($Lines[$at] -ne '') { $out += '' }
+        $out += $Lines[$at..($Lines.Count - 1)]
+    }
+    return @{ Lines = $out; Changed = $true }
+}
+
+function Update-SpeakerBlock {
+    param([string[]]$Lines, [string[]]$Block)
+    return Update-MarkedBlock -Lines $Lines -Block $Block -Begin $SpkBegin -End $SpkEnd `
+        -AnchorRe '^## 断言$' -Where Before
 }
 
 function Step-Scaffold {
@@ -604,7 +863,6 @@ function Step-Scaffold {
         ''
         '- [ ] 点名：上面「这集都有谁」里还剩「未知N」的，听两句填进方括号'
         '- [ ] 核对 `播出日期`——这里填的是**投稿日期**，直播日期常常早一天'
-        '- [ ] 阶段 2 抽取 → `_review/`'
         ''
     )
     Write-Utf8Lines -Path $notePath -Lines $note
@@ -650,6 +908,32 @@ function Initialize-Queue {
     }
 }
 
+function Invoke-Extract {
+    <# 阶段 1–2：转交 scripts\stage12.py。worker 在这里只做三件事——检查前置、
+       起进程、把 python 的日志原样喷给插件的日志面板。切块、调模型、闸门、
+       写草稿全在 python 那边，别在 PowerShell 里重写一遍。
+
+       为什么不挂进队列状态机：抽取要跑几分钟且烧订阅额度，得由人按按钮触发；
+       队列那套是「粘了链接就该自动跑完」的东西，两者节奏不同。#>
+    param([string]$Ep, [switch]$Again)
+    if (-not (Test-Path $Stage12Script)) { throw "找不到抽取脚本：$Stage12Script" }
+    $tr = Join-Path $AssetsDir "$Ep.transcript.json"
+    if (-not (Test-Path $tr)) { throw "$Ep 还没有逐字稿（$tr）——阶段 0 跑完了吗？" }
+
+    $argv = @($Stage12Script, '--ep', $Ep, '--vault', $Vault)
+    if ($Again) { $argv += '--force' }
+    Write-Log "$Ep 阶段 1–2 抽取：无头 Claude Code，一块要跑几分钟，别关窗口" Cyan
+    $prevEap = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try {
+        & $LocalPy @argv 2>&1 | ForEach-Object { Write-Host "    $_" }
+        $rc = $LASTEXITCODE
+    }
+    finally { $ErrorActionPreference = $prevEap }
+    if ($rc -ne 0) { throw "$Ep 抽取失败（退出码 $rc），详情看上面的日志" }
+    Write-Log "$Ep 抽取完成——草稿在 _review/，下一步是阶段 3 人工审核" Green
+}
+
 $script:NamedAt = @{}
 
 function Invoke-NamingPass {
@@ -664,18 +948,19 @@ function Invoke-NamingPass {
         if ($f.BaseName -notmatch '^(EP\d+)') { continue }
         $ep = $Matches[1]
         if ($Only -and $ep -ne $Only) { continue }
+        # 没有 diar.json 也照跑：点名会被 Resolve-Speakers 跳过，但状态条该补还得补
         $diar = Join-Path $AssetsDir "$ep.diar.json"
-        if (-not (Test-Path $diar)) { continue }
+        $diarAt = if (Test-Path $diar) { (Get-Item $diar).LastWriteTimeUtc.Ticks } else { 0 }
 
-        $stamp = "$($f.LastWriteTimeUtc.Ticks)/$((Get-Item $diar).LastWriteTimeUtc.Ticks)"
+        $stamp = "$($f.LastWriteTimeUtc.Ticks)/$diarAt"
         if (-not $Only -and $script:NamedAt[$f.FullName] -eq $stamp) { continue }
         try {
             if (Sync-EpisodeSpeakers -NotePath $f.FullName -Ep $ep) {
-                Write-Log "$ep 说话人小表已回填" Green
+                Write-Log "$ep 笔记已回填（点名／状态条）" Green
             }
             # 自己刚写过就要重新取修改时间，否则下一轮又跑一遍
             $script:NamedAt[$f.FullName] =
-                "$((Get-Item $f.FullName).LastWriteTimeUtc.Ticks)/$((Get-Item $diar).LastWriteTimeUtc.Ticks)"
+                "$((Get-Item $f.FullName).LastWriteTimeUtc.Ticks)/$diarAt"
         }
         catch {
             Write-Log "$ep 点名回填失败：$_" Red
@@ -703,18 +988,24 @@ function Invoke-QueuePass {
             & $STEPS[$stage] $row
             $row.Fields['阶段'] = $FLOW[$stage].Next
             $row.Fields['进度'] = ''
+            $row.Fields['失败于'] = ''
             Save-Row $row
             if ($row.Fields['阶段'] -eq '完成') {
                 Write-Log "$ep 全流程完成 ✓" Green
             }
         }
         catch {
+            # 把摔在哪一步记进队列。少了这个字段，「失败」就抹掉了唯一能推断
+            # 重跑起点的信息，人只剩 -Reset 可用——那是从下载重来，等于把已经
+            # 跑完的转写和分离（几十分钟）白扔一遍。
             $row.Fields['阶段'] = '失败'
             $row.Fields['进度'] = ''
+            $row.Fields['失败于'] = $stage
             $row.Fields['错误'] = ("$_" -replace '[\[\]\r\n]', ' ').Trim()
             Save-Row $row
             Write-Log "$ep 在「$stage」失败：$_" Red
-            Write-Log "  改回 [阶段:: $stage] 保存即可重试；或 .\scripts\worker.ps1 -Reset $ep" DarkYellow
+            Write-Log "  接着这一步重跑： .\scripts\worker.ps1 -Retry $ep   （或把 [阶段:: 失败] 手改回 $stage）" DarkYellow
+            Write-Log "  -Reset $ep 是从下载整条重来，一般不需要" DarkGray
         }
         return $true
     }
@@ -734,17 +1025,44 @@ if ($Reset) {
             $row.Fields['阶段'] = '待下载'
             $row.Fields['进度'] = ''
             $row.Fields['错误'] = ''
+            $row.Fields['失败于'] = ''
             Save-Row $row
-            Write-Log "$Reset 已重置为「待下载」" Green
+            Write-Log "$Reset 已重置为「待下载」（整条重来）" Green
             exit 0
         }
     }
     throw "队列里没有 $Reset"
 }
 
+if ($Retry) {
+    # 只把阶段挪回摔倒的那一步。前面几步的产物都还在暂存区和 _assets/ 里，
+    # 各步自己也都是幂等的（音频按字节数判重、embedding 有缓存），所以重跑很便宜。
+    foreach ($row in @(Read-Queue)) {
+        if (-not ($row.Fields.Contains('ep') -and $row.Fields['ep'] -eq $Retry)) { continue }
+        $at = if ($row.Fields.Contains('失败于')) { $row.Fields['失败于'] } else { '' }
+        if (-not $FLOW.Contains($at)) {
+            throw "$Retry 没有可重跑的失败步骤（[失败于:: $at]）。" +
+                  "要整条重来用 -Reset $Retry，或直接把 [阶段:: …] 改成想跑的那一步。"
+        }
+        $row.Fields['阶段'] = $at
+        $row.Fields['进度'] = ''
+        $row.Fields['错误'] = ''
+        $row.Fields['失败于'] = ''
+        Save-Row $row
+        Write-Log "$Retry 打回「$at」，前面几步的产物保留" Green
+        exit 0
+    }
+    throw "队列里没有 $Retry"
+}
+
 if ($Name) {
     Invoke-NamingPass -Only $Name
     Write-Log "$Name 点名回填完毕" Green
+    exit 0
+}
+
+if ($Extract) {
+    Invoke-Extract -Ep $Extract -Again:$Redo
     exit 0
 }
 

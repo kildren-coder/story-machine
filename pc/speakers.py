@@ -43,6 +43,17 @@ MARGIN = 0.10
 # 所以入库是幂等的：同一集再点一次名，替换而不是叠加。
 MAX_SAMPLES = 20
 
+# 库内两个人像到这个程度就报警。
+#
+# 为什么需要它：这个库是**全局**的，不按节目/来源分。人越攒越多，就越可能有个
+# 新面孔碰巧跟某个老人撞过 0.65 被认错——而认错是**静默**的，笔记上只会写一个
+# 看起来很正常的名字。实测目前不同人之间是 0.33–0.35，同一人跨集 0.87，中间一大
+# 片空白；0.50 落在「已经明显高于正常异人值」和「还没到认定门槛」之间，报得出苗头
+# 又不会天天叫。
+#
+# 报警不改任何判定——它只是让你在库变脏的那一天知道，而不是半年后翻出一堆错名字。
+LIB_WARN = 0.50
+
 ROLES = ("主播", "嘉宾")
 
 
@@ -124,6 +135,23 @@ def parse_name(raw):
 
 # ---------------------------------------------------------------- 比对
 
+def risky_pairs(lib, floor=None):
+    """库里两两比一遍，挑出像得过头的那些对，从高到低。"""
+    floor = LIB_WARN if floor is None else floor
+    people = lib["people"]
+    if len(people) < 2:
+        return []
+    pr = {p["name"]: pooled(p) for p in people}
+    names = sorted(pr)
+    out = []
+    for i, a in enumerate(names):
+        for b in names[i + 1:]:
+            s = float(np.dot(pr[a], pr[b]))
+            if s >= floor:
+                out.append([a, b, round(s, 4)])
+    return sorted(out, key=lambda r: -r[2])
+
+
 def resolve(lib, diar):
     """给每个簇一个归属。返回按首次出现排序的列表。"""
     people = lib["people"]
@@ -197,6 +225,19 @@ def cmd_list(lib):
         for i, a in enumerate(names):
             for b in names[i + 1:]:
                 print("  %s × %s  %.3f" % (a, b, float(np.dot(pr[a], pr[b]))))
+        print_lib_warning(lib)
+
+
+def print_lib_warning(lib):
+    risky = risky_pairs(lib)
+    if not risky:
+        return
+    print("\n⚠ 声纹库该体检了——下面这些人已经像到 %.2f 以上（认定门槛 %.2f）：" % (LIB_WARN, THRESHOLD))
+    for a, b, s in risky:
+        print("  %s × %s  %.3f%s" % (a, b, s, "   ← 已越过门槛，随时可能认错" if s >= THRESHOLD else ""))
+    print("  多半是两种情况：(1) 某一集点错了名，把两个人的声音混进了同一个人名下；"
+          "(2) 确实有两个人声音很像。\n"
+          "  第一种去那一集的说话人小表改方括号里的名字即可（改一个字就是一次重新入库）。")
 
 
 def main():
@@ -265,8 +306,13 @@ def main():
                  "%.3f" % r["score"] if r["score"] is not None else "—",
                  hms(r["seconds"]), hms(r["first"]), tag))
 
+    print_lib_warning(lib)
+
     if a.out:
-        save(pathlib.Path(a.out), {"ep": a.ep, "threshold": THRESHOLD, "people": rows})
+        # lib_risky 随每次比对一起回去，worker 只把**跟本集有关**的那几对写进笔记
+        save(pathlib.Path(a.out), {"ep": a.ep, "threshold": THRESHOLD,
+                                   "lib_warn": LIB_WARN, "lib_risky": risky_pairs(lib),
+                                   "people": rows})
 
 
 if __name__ == "__main__":
