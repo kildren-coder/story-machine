@@ -1,6 +1,6 @@
 # PROTOTYPE · Dataview 行级查询验证
 
-**丢弃品，不并回 main。** 分支：`proto/dataview-rowlevel`。
+**丢弃品。** 2026-07 在分支 `proto/dataview-rowlevel` 上做的验证；该分支后来承载了整条阶段 0 流水线，2026-09-12 快进并入 main 时一起带了进来。留着是因为 ADR 0002 的队列语法建立在它的结论上。
 
 ## 问题
 
