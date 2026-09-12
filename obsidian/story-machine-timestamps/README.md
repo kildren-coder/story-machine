@@ -10,6 +10,7 @@
 
 ## 设计
 
+- **两条渲染路径，因为 Obsidian 有两套渲染器**（v0.4.0）：阅读视图走 `registerMarkdownPostProcessor` + DOM TreeWalker；实时预览走 CodeMirror 6 `ViewPlugin` 装饰——**post processor 在实时预览里完全不跑**，只做它的话时间戳就只在阅读视图可点，而阅读视图改不了字。审草稿时要一边改一边点，两个都得有。光标落进某个时间戳时该处不装饰、露出原文，否则没法编辑。`@codemirror/*` 的 require 包在 try 里，拿不到就只丢实时预览这条路。
 - **音频按数据绑，不按位置**：读本笔记 frontmatter 的 `音频:`（回落 `audio:`），经 `metadataCache.getFirstLinkpathDest` 解析成 `TFile`，取 `vault.getResourcePath`。
 - **没声明 `音频:` 的笔记完全不介入**——这既是开关，也是跨集串音频的防线。
 - **跳过 Dataview 查询块**（`.block-language-dataview` / `.block-language-dataviewjs`）：查询结果的行可能来自别的集，本插件按「本笔记的 frontmatter」绑音频，接管了就会绑错。跨集阅读面走 dataviewjs 自绘。

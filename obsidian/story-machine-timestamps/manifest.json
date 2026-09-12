@@ -1,9 +1,9 @@
 {
   "id": "story-machine-timestamps",
   "name": "Story Machine Timestamps",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "minAppVersion": "1.4.0",
-  "description": "把断言行里的 MM:SS / HH:MM:SS 变成可点跳播按钮。音频按笔记 frontmatter 的「音频:」字段解析，不按 DOM 位置。",
+  "description": "把断言行里的 MM:SS / HH:MM:SS 变成可点跳播按钮，阅读视图与实时预览都生效。音频按笔记 frontmatter 的「音频:」字段解析，不按 DOM 位置。",
   "author": "story-machine",
   "isDesktopOnly": false
 }

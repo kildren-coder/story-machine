@@ -1,6 +1,21 @@
 "use strict";
 
-const { Plugin, TFile } = require("obsidian");
+const obsidian = require("obsidian");
+const { Plugin, TFile, MarkdownView } = obsidian;
+// Obsidian 把 @codemirror/* 作为外部模块提供给插件。真拿不到时宁可只剩阅读视图，
+// 也不能让整个插件加载失败——那会把本来能用的那条路也一起弄没。
+let CM = null;
+try {
+  CM = { ...require("@codemirror/view"), ...require("@codemirror/language") };
+} catch (e) {
+  console.warn("[sm-ts] 拿不到 CodeMirror，实时预览里的时间戳不会变按钮", e);
+}
+
+// 两条渲染路径，因为 Obsidian 有两套渲染器：
+//   阅读视图 → registerMarkdownPostProcessor，走 DOM 文本节点（下面的 decorate）
+//   实时预览 → CodeMirror 6 装饰，post processor **完全不跑**（下面的编辑器扩展）
+// 只做前者的话，「一边审草稿一边点时间戳听原话」这个阶段 3 的主场景是废的
+// ——阅读视图改不了字，编辑模式点不动按钮。
 
 // MM:SS 或 HH:MM:SS。分钟允许到三位（141 分钟的一集写成 135:00 也认）。
 // 前后的 (?<![\d:]) / (?![\d:]) 挡住 1350:00 这类越界写法和被截断的匹配。
@@ -49,6 +64,122 @@ module.exports = class StoryMachineTimestamps extends Plugin {
       this.decorate(el, audio, mode, ctx.sourcePath);
       this.watch(el, audio, mode, ctx.sourcePath);
     }, POST_PROCESSOR_ORDER);
+
+    if (CM) this.registerEditorExtension(this.editorExtension());
+  }
+
+  // —— 实时预览：CM6 装饰 ——
+  //
+  // 只处理视口内的行；光标落在某个时间戳里时**不装饰它**，好让你能改字
+  // （这是 Live Preview 的通行做法，也是「审草稿时要能编辑」的前提）。
+  editorExtension() {
+    const self = this;
+    const { ViewPlugin, Decoration, WidgetType, EditorView } = CM;
+
+    class TsWidget extends WidgetType {
+      constructor(raw, sec, audio) {
+        super();
+        this.raw = raw;
+        this.sec = sec;
+        this.audio = audio;
+      }
+      eq(o) {
+        return o.raw === this.raw && o.sec === this.sec && o.audio.url === this.audio.url;
+      }
+      toDOM() { return self.makeBtn(this.raw, this.sec, this.audio); }
+      // 返回 false：让 pointerdown 照常冒泡到我们的委托监听（jump 在那儿）
+      ignoreEvent() { return false; }
+    }
+
+    const build = (view) => {
+      const audio = self.audioForEditor(view);
+      if (!audio) return Decoration.none;
+      const mode = self.resolveMode(self.frontmatter(self.pathForEditor(view)));
+      const ranges = [];
+      const sel = view.state.selection.main;
+      let lastEnd = -1;
+      for (const { from, to } of view.visibleRanges) {
+        const text = view.state.sliceDoc(from, to);
+        TS_RE.lastIndex = 0;
+        let m;
+        while ((m = TS_RE.exec(text)) !== null) {
+          const [raw, a, b, c] = m;
+          let start = from + m.index;
+          let end = start + raw.length;
+          let target = audio;
+
+          const q = text.slice(Math.max(0, m.index - 41), m.index).match(QUALIFIER_RE);
+          if (q) {
+            const named = self.resolveByName(q[1], self.pathForEditor(view) ?? "");
+            if (named) { target = named; start -= q[1].length + 1; }
+          } else if (mode === "字段" && !FIELD_KEYS.has(self.keyBefore(text, m.index))) {
+            continue;
+          }
+          // 光标或选区碰到这一段就露出原文，否则没法编辑
+          if (sel.to >= start - 1 && sel.from <= end + 1) continue;
+          if (self.inSkippedSyntax(view, start)) continue;
+          // 限定符会把起点往前挪，理论上能和上一处叠上；replace 装饰不许重叠
+          if (start < lastEnd) continue;
+          lastEnd = end;
+
+          const sec = c === undefined
+            ? Number(a) * 60 + Number(b)
+            : Number(a) * 3600 + Number(b) * 60 + Number(c);
+          ranges.push(Decoration.replace({ widget: new TsWidget(raw, sec, target) })
+            .range(start, end));
+        }
+      }
+      return Decoration.set(ranges, true);
+    };
+
+    return ViewPlugin.fromClass(class {
+      constructor(view) { this.decos = this.safe(view); }
+      update(u) {
+        if (u.docChanged || u.viewportChanged || u.selectionSet) {
+          this.decos = this.safe(u.view);
+        }
+      }
+      // 装饰算错了大不了不显示按钮；把编辑器整个搞崩就是另一回事了
+      safe(view) {
+        try { return build(view); } catch (e) { self.log("CM6 装饰失败", e); return Decoration.none; }
+      }
+    }, {
+      decorations: (v) => v.decos,
+      provide: (p) => EditorView.atomicRanges.of((v) => v.plugin(p)?.decos || Decoration.none),
+    });
+  }
+
+  // 代码块、行内代码、frontmatter、已有链接里的数字一概不碰——和阅读视图的
+  // SKIP 选择器是同一份意图，只是这边只能问语法树。
+  inSkippedSyntax(view, pos) {
+    let hit = false;
+    CM.syntaxTree(view.state).iterate({
+      from: pos, to: pos + 1,
+      enter: (n) => {
+        if (/code|frontmatter|url|link|math|hashtag/i.test(n.name)) hit = true;
+      },
+    });
+    return hit;
+  }
+
+  pathForEditor(view) {
+    const field = obsidian.editorInfoField;
+    if (field) {
+      const info = view.state.field(field, false);
+      if (info?.file) return info.file.path;
+    }
+    let path = null;
+    this.app.workspace.iterateAllLeaves((leaf) => {
+      if (path) return;
+      const v = leaf.view;
+      if (v instanceof MarkdownView && v.editor?.cm === view && v.file) path = v.file.path;
+    });
+    return path;
+  }
+
+  audioForEditor(view) {
+    const path = this.pathForEditor(view);
+    return path ? this.resolveAudio(path) : null;
   }
 
   onunload() {
@@ -65,6 +196,7 @@ module.exports = class StoryMachineTimestamps extends Plugin {
   }
 
   frontmatter(sourcePath) {
+    if (!sourcePath) return null;   // 编辑器扩展那边可能问不出笔记路径
     const src = this.app.vault.getAbstractFileByPath(sourcePath);
     if (!(src instanceof TFile)) return null;
     return this.app.metadataCache.getFileCache(src)?.frontmatter ?? null;
