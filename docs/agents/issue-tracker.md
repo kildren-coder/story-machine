@@ -8,7 +8,9 @@
 - Apply triage labels to route work (see `docs/agents/triage-labels.md`)
 - Close issues when work is complete
 
-**Note on PRs:** External pull requests are **not** currently used as a request surface; all work is driven by issues + direct commits.
+**Frontier and claims:** the AFK frontier is every open issue labelled `ready-for-agent` with no assignee and no open blocker (GitHub native dependencies). Claiming = assigning yourself. See `docs/agents/afk-sandcastle.md` for what a ticket must satisfy before it gets the label.
+
+**Note on PRs:** PRs come from the AFK sandbox — one issue → branch `agent/issue-<n>` → PR with `Closes #<n>`; humans merge. PRs are not a request surface: requests are issues. Interactive sessions still commit to `main` directly.
 
 **History:** Issues #1–#49 belong to the 2026-07 "断言表" design (wayfinder map #1 and its child tickets). They were closed in bulk on 2026-09-12 when the project was repositioned as a daily digest (ADR 0003). Read them as history only; do not reopen them for new work.
 

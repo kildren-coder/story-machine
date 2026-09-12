@@ -12,6 +12,12 @@ Issues live in GitHub at [`github.com/kildren-coder/story-machine`](https://gith
 
 Five canonical labels (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`) route issues to the right handler. See `docs/agents/triage-labels.md`.
 
+### AFK workflow
+
+`ready-for-agent` issues are consumed by sandboxed AFK agents via sandcastle (`.sandcastle/`); the AFK boundary is a green PR — merge, and running the real EP02 sample against the merged layer, are separate human-driven steps. See `docs/agents/afk-sandcastle.md`.
+
+When drafting tickets, apply that doc's admission criteria per ticket — especially the fixture check (fixtures must be **synthetic**, never real transcript excerpts — red line 10), the four questions (失败语义 / 资源边界 / 生命周期边缘 / 集成契约), and the rule that prompt-quality work is not an AFK ticket.
+
 ### Domain docs
 
 Single-context: `CONTEXT.md` + `docs/adr/` at repo root. See `docs/agents/domain.md` for reading rules.
@@ -33,6 +39,7 @@ Single-context: `CONTEXT.md` + `docs/adr/` at repo root. See `docs/agents/domain
 **工作方式：**
 - 派 Agent 子代理**必须显式 `model: "sonnet"`**（论证类才 opus），一次并发 ≤ 3；默认继承会烧光月度额度
 - 全量重写长文档走「备份 commit → 删备份 commit」两步
+- AFK 夜跑一晚只开一个 `--loop`：与 agent-alert 共用同一个 5h 额度池，双开会双双撞墙
 - 面向用户的输出一律中文
 
 See `CONTEXT.md` for the entry point and **`SPEC.md` for the authoritative spec** (layers, data contracts, red lines, dev priorities).

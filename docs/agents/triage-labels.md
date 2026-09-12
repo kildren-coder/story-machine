@@ -6,7 +6,7 @@ Five canonical labels for routing work:
 |-------|---------|---------------|
 | `needs-triage` | Issue is new, not yet categorized | Auto-applied to new issues; remove once triaged |
 | `needs-info` | Blocked on missing information | Ask in comments for details; remove when clarified |
-| `ready-for-agent` | Agent can pick up and work | Issue is clear and actionable for Claude Code |
+| `ready-for-agent` | AFK sandbox can consume it | Passes the admission checklist in `docs/agents/afk-sandcastle.md`: one-PR size, acceptance offline-testable, synthetic fixtures in repo, four questions answered |
 | `ready-for-human` | Requires human decision/input | e.g., architecture review, cost/priority tradeoff |
 | `wontfix` | Not planning to address | Closed with this label for reference |
 

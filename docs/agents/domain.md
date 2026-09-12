@@ -40,7 +40,11 @@
 │   ├── agents/
 │   │   ├── domain.md                   ← This file
 │   │   ├── issue-tracker.md            ← GitHub issue workflow
-│   │   └── triage-labels.md            ← Label meanings
-│   └── prototypes/daily-digest/        ← 2026-09-11 digest prototype: verdict + real fact-check samples
+│   │   ├── triage-labels.md            ← Label meanings
+│   │   └── afk-sandcastle.md           ← AFK sandbox workflow + ready-for-agent admission checklist
+│   ├── prototypes/daily-digest/        ← 2026-09-11 digest prototype: verdict + real fact-check samples
+│   └── qa/                             ← Per-issue QA docs written by AFK agents (issue-<n>.md, -brief.md)
+├── .sandcastle/                        ← AFK orchestrator, prompts, Dockerfile (not project code)
+├── scripts/test.sh                     ← Offline test entry used by AFK and humans
 └── CLAUDE.md                           ← Agent skills config + project summary
 ```
