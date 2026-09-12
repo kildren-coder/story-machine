@@ -1,0 +1,32 @@
+{
+ "id": "opening",
+ "title": "加更说明",
+ "ranges": [
+  [
+   "00:00:00",
+   "00:01:00"
+  ]
+ ],
+ "who": [
+  "阿桥"
+ ],
+ "paras": [
+  "[00:00:00] <who>阿桥</who>说下播后有朋友发来跟大桥收费有关的材料，加更十几分钟。"
+ ],
+ "quotes": [],
+ "claims": [],
+ "channels": [],
+ "asr": [],
+ "provenance": {
+  "derived_from": [
+   "EP92.transcript.json",
+   "topics.json"
+  ],
+  "layer": "L2",
+  "unit": "opening",
+  "engine": "claude-sonnet-5",
+  "effort": "medium",
+  "prompt_version": "L2@0.1",
+  "generated_at": "2026-03-12T23:10:00+08:00"
+ }
+}

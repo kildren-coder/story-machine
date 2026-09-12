@@ -1,0 +1,32 @@
+{
+ "type": "result",
+ "subtype": "success",
+ "is_error": false,
+ "duration_ms": 41000,
+ "duration_api_ms": 39000,
+ "num_turns": 1,
+ "stop_reason": "end_turn",
+ "result": "```json\n{\n  \"date\": \"2026-03-12\",\n  \"events\": [\n    {\n      \"id\": \"2026-northbridge-toll\",\n      \"title\": \"北港大桥收费方案：定价、货车费率与 2019 年隧道先例\",\n      \"tag\": \"地方市政 · 交通\",\n      \"refs\": [\n        {\n          \"ep\": \"EP91\",\n          \"topic\": \"bridge-toll\",\n          \"ts\": \"00:03:30\",\n          \"gist\": \"通报按车型收费、建议价十五块可能压到十二、贷款三十八亿、2019 隧道先例、浮桥与货车\"\n        },\n        {\n          \"ep\": \"EP92\",\n          \"topic\": \"bridge-followup\",\n          \"ts\": \"00:01:00\",\n          \"gist\": \"货车按轴计费的征求意见函照片、货运公司的账、更正每月前十次\"\n        }\n      ]\n    },\n    {\n      \"id\": \"2026-hekou-night-market\",\n      \"title\": \"河口夜市搬迁滨江路：消防倒逼与商户的总账\",\n      \"tag\": \"地方市政 · 民生\",\n      \"refs\": [\n        {\n          \"ep\": \"EP91\",\n          \"topic\": \"night-market\",\n          \"ts\": \"00:19:00\",\n          \"gist\": \"晚报报道六月底前搬迁、一百二十户之争、四十三处隐患、2016 老码头先例、租金账\"\n        },\n        {\n          \"ep\": \"EP91\",\n          \"topic\": \"parking\",\n          \"ts\": \"00:30:00\",\n          \"gist\": \"不存在的话题\"\n        }\n      ]\n    },\n    {\n      \"id\": \"2026-hekou-old-photos\",\n      \"title\": \"下周老照片\",\n      \"tag\": \"预告\",\n      \"refs\": [\n        {\n          \"ep\": \"EP91\",\n          \"topic\": \"qa\",\n          \"ts\": \"00:41:30\",\n          \"gist\": \"aside 不该成事件\"\n        }\n      ]\n    }\n  ]\n}\n```",
+ "session_id": "synthetic-fixture-session",
+ "total_cost_usd": 0.0195,
+ "usage": {
+  "input_tokens": 4000,
+  "cache_creation_input_tokens": 0,
+  "cache_read_input_tokens": 0,
+  "output_tokens": 500
+ },
+ "modelUsage": {
+  "claude-sonnet-5": {
+   "inputTokens": 4000,
+   "outputTokens": 500,
+   "cacheReadInputTokens": 0,
+   "cacheCreationInputTokens": 0,
+   "webSearchRequests": 0,
+   "costUSD": 0.0195,
+   "contextWindow": 200000,
+   "maxOutputTokens": 64000
+  }
+ },
+ "permission_denials": [],
+ "uuid": "00000000-0000-4000-8000-000000000091"
+}

@@ -1,0 +1,32 @@
+{
+ "id": "outro",
+ "title": "下周预告",
+ "ranges": [
+  [
+   "00:13:00",
+   "00:14:00"
+  ]
+ ],
+ "who": [
+  "阿桥"
+ ],
+ "paras": [
+  "[00:13:00] 下周老照片那期时间不变，周四晚上八点。"
+ ],
+ "quotes": [],
+ "claims": [],
+ "channels": [],
+ "asr": [],
+ "provenance": {
+  "derived_from": [
+   "EP92.transcript.json",
+   "topics.json"
+  ],
+  "layer": "L2",
+  "unit": "outro",
+  "engine": "claude-sonnet-5",
+  "effort": "medium",
+  "prompt_version": "L2@0.1",
+  "generated_at": "2026-03-12T23:10:00+08:00"
+ }
+}

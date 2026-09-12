@@ -1,0 +1,33 @@
+{
+ "id": "qa",
+ "title": "结尾弹幕与下周预告",
+ "ranges": [
+  [
+   "00:41:30",
+   "00:42:40"
+  ]
+ ],
+ "who": [
+  "阿桥",
+  "老周"
+ ],
+ "paras": [
+  "[00:41:30] 结尾回了几条与今天话题无关的弹幕：下周聊河口老照片，<who>老周</who>准备了一九八几年的照片。"
+ ],
+ "quotes": [],
+ "claims": [],
+ "channels": [],
+ "asr": [],
+ "provenance": {
+  "derived_from": [
+   "EP91.transcript.json",
+   "topics.json"
+  ],
+  "layer": "L2",
+  "unit": "qa",
+  "engine": "claude-sonnet-5",
+  "effort": "medium",
+  "prompt_version": "L2@0.1",
+  "generated_at": "2026-03-12T23:10:00+08:00"
+ }
+}

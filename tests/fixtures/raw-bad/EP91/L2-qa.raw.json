@@ -1,0 +1,32 @@
+{
+ "type": "result",
+ "subtype": "success",
+ "is_error": false,
+ "duration_ms": 41000,
+ "duration_api_ms": 39000,
+ "num_turns": 1,
+ "stop_reason": "end_turn",
+ "result": "这一段切片太短，我没法按要求整理，建议合并到前一个话题。",
+ "session_id": "synthetic-fixture-session",
+ "total_cost_usd": 0.054,
+ "usage": {
+  "input_tokens": 9000,
+  "cache_creation_input_tokens": 0,
+  "cache_read_input_tokens": 0,
+  "output_tokens": 1800
+ },
+ "modelUsage": {
+  "claude-sonnet-5": {
+   "inputTokens": 9000,
+   "outputTokens": 1800,
+   "cacheReadInputTokens": 0,
+   "cacheCreationInputTokens": 0,
+   "webSearchRequests": 0,
+   "costUSD": 0.054,
+   "contextWindow": 200000,
+   "maxOutputTokens": 64000
+  }
+ },
+ "permission_denials": [],
+ "uuid": "00000000-0000-4000-8000-000000000091"
+}

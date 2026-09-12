@@ -1,0 +1,32 @@
+{
+ "type": "result",
+ "subtype": "success",
+ "is_error": false,
+ "duration_ms": 41000,
+ "duration_api_ms": 39000,
+ "num_turns": 1,
+ "stop_reason": "end_turn",
+ "result": "```json\n{\n  \"ep\": \"EP92\",\n  \"topics\": [\n    {\n      \"id\": \"opening\",\n      \"title\": \"加更说明\",\n      \"kind\": \"aside\",\n      \"ranges\": [\n        [\n          \"00:00:00\",\n          \"00:01:00\"\n        ]\n      ],\n      \"who\": [\n        \"阿桥\"\n      ],\n      \"gist\": \"下播后收到材料，加更十几分钟\"\n    },\n    {\n      \"id\": \"bridge-followup\",\n      \"title\": \"北港大桥货车费率：一张征求意见函的照片\",\n      \"kind\": \"talk\",\n      \"ranges\": [\n        [\n          \"00:01:00\",\n          \"00:13:00\"\n        ]\n      ],\n      \"who\": [\n        \"阿桥\"\n      ],\n      \"gist\": \"按轴计费的征求意见版费率、货运公司的账、更正每月前十次\"\n    },\n    {\n      \"id\": \"outro\",\n      \"title\": \"下周预告\",\n      \"kind\": \"aside\",\n      \"ranges\": [\n        [\n          \"00:13:00\",\n          \"00:14:00\"\n        ]\n      ],\n      \"who\": [\n        \"阿桥\"\n      ],\n      \"gist\": \"老照片那期周四八点\"\n    }\n  ]\n}\n```",
+ "session_id": "synthetic-fixture-session",
+ "total_cost_usd": 0.009,
+ "usage": {
+  "input_tokens": 1500,
+  "cache_creation_input_tokens": 0,
+  "cache_read_input_tokens": 0,
+  "output_tokens": 300
+ },
+ "modelUsage": {
+  "claude-sonnet-5": {
+   "inputTokens": 1500,
+   "outputTokens": 300,
+   "cacheReadInputTokens": 0,
+   "cacheCreationInputTokens": 0,
+   "webSearchRequests": 0,
+   "costUSD": 0.009,
+   "contextWindow": 200000,
+   "maxOutputTokens": 64000
+  }
+ },
+ "permission_denials": [],
+ "uuid": "00000000-0000-4000-8000-000000000091"
+}
