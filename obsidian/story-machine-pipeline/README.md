@@ -55,7 +55,7 @@ worker: D:\code\story-machine\scripts\worker.ps1
 - https://www.bilibili.com/video/BVxxx [ep:: EP01] [标题:: …] [阶段:: 转写中] [进度:: 43% (01:01:20/02:21:25)] [时长:: 02:21:25] [更新:: 20:58:12]
 ```
 
-括号式 inline field 是 `proto/dataview-rowlevel` 那轮验证过的写法（续行式不成立），所以队列可以直接被 Dataview 查询——控制台笔记里的「进度总览」表就是这么来的。
+括号式 inline field 是实测过能被 Dataview 行级查询的写法（续行式不成立，ADR 0002），所以队列可以直接被 Dataview 查询——控制台笔记里的「进度总览」表就是这么来的。
 
 阶段取值：`待下载 → 下载中 → 待转写 → 转写中 → 待分离 → 分离中 → 待取回 → 取回中 → 待建笔记 → 建笔记中 → 完成`，外加终态 `失败`。手工把 `阶段` 改回任意一个「待\*」就能从那一步重跑。
 

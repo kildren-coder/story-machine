@@ -17,8 +17,8 @@ Five canonical labels for routing work:
 
 ## Examples
 
-- **`needs-triage`** → "Add CLI command for bulk transcription" (new, unclear scope)
-- **`ready-for-agent`** → "Implement Gemini Flash extraction for Stage 2" (clear spec, actionable)
-- **`needs-info`** → "Decide on max fact-checks per episode" (needs cost/quality tradeoff discussion)
-- **`ready-for-human`** → "Should we auto-batch process 1–2 episodes/day?" (design decision)
-- **`wontfix`** → "NotebookLM integration" (out-of-scope; parallel tool only)
+- **`needs-triage`** → "关注列表自动扫新投稿入队" (new, scope unclear)
+- **`ready-for-agent`** → "L3 闸门：限定词保留检查" (clear spec in SPEC §4 L3, actionable)
+- **`needs-info`** → "L5a 事实核查要不要升 opus" (needs token cost vs. quality data from a real run; SPEC §11)
+- **`ready-for-human`** → "时间戳跳播加不加 B 站 `?t=` 第二按钮" (product decision; SPEC §11)
+- **`wontfix`** → "给「他们提到的信源」打信用分" (SPEC §1.4 不做)

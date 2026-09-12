@@ -15,7 +15,7 @@
 3. **SPEC.md** is the authoritative requirements document
    - CONTEXT.md is the short entry point; SPEC.md is the full spec. **On conflict, SPEC.md wins.**
    - Covers the layers L1–L7 (§4), data contracts (§5), vault layout (§6), model/effort table (§7), red lines (§8), dev priorities (§10)
-   - v3 (2026-09-12) replaced v2 (2026-07-27, claim-table design); v2 is retrievable by file name from the backup commit named in SPEC §12
+   - v3 (2026-09-12) replaced v2 (2026-07-27, claim-table design); v2 is retrievable from the backup commit named in the SPEC header (`git show 28abfb5:SPEC.BACKUP.md`)
 
 ## When Consuming
 
@@ -41,6 +41,6 @@
 │   │   ├── domain.md                   ← This file
 │   │   ├── issue-tracker.md            ← GitHub issue workflow
 │   │   └── triage-labels.md            ← Label meanings
-│   └── prototypes/                     ← Answered questions, kept as primary sources
+│   └── prototypes/daily-digest/        ← 2026-09-11 digest prototype: verdict + real fact-check samples
 └── CLAUDE.md                           ← Agent skills config + project summary
 ```

@@ -24,10 +24,3 @@ gh issue create \
 # List open issues needing agent work
 gh issue list --label "ready-for-agent" --state open
 ```
-
-## Consuming Skills
-
-- **to-tickets** — reads/writes GitHub issues
-- **triage** — applies issue labels and routes work
-- **to-spec** — documents design decisions as issues
-- **qa** — files bugs and test results as issues
