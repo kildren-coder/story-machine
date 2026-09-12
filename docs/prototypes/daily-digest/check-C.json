@@ -1,0 +1,234 @@
+{
+  "event": "C",
+  "overall": "warn",
+  "deviations": [
+    {
+      "ts": "02:44:22",
+      "claim": "台湾2025年全年成长率8点多%；2026年上半年平均13.7%（Q1 14.5%、Q2 12.92%）；主计总处全年预测9–11%，认为会到两位数",
+      "verdict": "ok",
+      "basis": "主计总处数据精确吻合：2025全年8.63%（2026-01-30公布，15年新高）；2026上半年平均13.72%；Q2概估12.92%；Q1修正后14.55%（初值13.69%）。直播前（8/2）最新官方全年预测是5/29公布的9.64%，落在9–11%区间；8/14（直播后）上修至11.05%，印证'会到两位数'的判断后来应验。",
+      "links": [
+        {"t": "台商网 2025年GDP实际成长率", "url": "https://tbotaiwan.com/growth-rate-of-real-gdp-taiwan-2025/"},
+        {"t": "大纪元 2026上半年平均13.72%", "url": "https://www.epochtimes.com/gb/26/7/31/n14821099.htm"},
+        {"t": "中央社 Q2概估12.92%", "url": "https://www.cna.com.tw/news/afe/202607310205.aspx"},
+        {"t": "桃园电子报 5/29预测9.64%", "url": "https://taronews.tw/2026/05/29/1194272/"},
+        {"t": "Focus Taiwan 8/17上修11.05%", "url": "https://japan.focustaiwan.tw/economy/202608170004"}
+      ]
+    },
+    {
+      "ts": "02:45:56",
+      "claim": "台湾「缺电游行」上街20万人",
+      "verdict": "bad",
+      "basis": "20万人规模的集会确实发生过，但事件被贴错标签：2026年7月25日『我是人，我反毒台』凯道集会（国民党/民众党号召，因中联大豆油苯并芘食安丑闻）主办方宣称超20万人，诉求是食安问题与要求官员下台，与缺电无关；另查到2025年8月的反核三延役集会实际仅约百余人，远非20万规模。没有查到任何独立的20万人级『缺电游行』。",
+      "links": [
+        {"t": "维基百科「我是人，我反毒台」游行", "url": "https://zh.wikipedia.org/wiki/%E3%80%8C%E6%88%91%E6%98%AF%E4%BA%BA%EF%BC%8C%E6%88%91%E5%8F%8D%E6%AF%92%E5%8F%B0%E3%80%8D%E9%81%8A%E8%A1%8C"},
+        {"t": "台海网 报道", "url": "https://www.itaiwannews.cn/2026-07-27/51e7d1a9-ac1e-423f-a06b-29b2c931384f.html"},
+        {"t": "Focus Taiwan 反核三延役集会约百余人", "url": "https://focustaiwan.tw/society/202508160014"}
+      ]
+    },
+    {
+      "ts": "02:43:02",
+      "claim": "台积电亚利桑那厂一年多才开一条生产线、只做了几百块芯片，美国没能力跟台湾工程师有效沟通",
+      "verdict": "bad",
+      "basis": "产能数字严重过时：Fab21首厂2024年Q4已进入N4量产，良率追平甚至超台湾本厂约4个百分点，已为苹果A16/S9、AMD Ryzen 9000系列量产供货；2025年月产能达9–10万片晶圆；第二厂2025年完工，目标2027下半年N3量产，总计划6座厂、投资1650亿美元。『一年多只做几百块芯片』像是停留在2022–23年工程试产阶段的过时说法。沟通/文化冲突部分确有大量真实报道支持，这部分不算错。",
+      "links": [
+        {"t": "英为财情 台积电亚利桑那产能", "url": "https://cn.investing.com/news/stock-market-news/article-2531899"},
+        {"t": "Arizona Tech Council Fab21已量产4nm", "url": "https://www.aztechcouncil.org/tsmc-arizona-fab21-already-making-4nm-chips/"},
+        {"t": "新浪财经", "url": "https://finance.sina.com.cn/tech/roll/2024-12-30/doc-inecfkur2465185.shtml"},
+        {"t": "Tom's Hardware 美台工程师文化冲突报道", "url": "https://www.tomshardware.com/news/tsmc-continues-working-through-us-staff-culture-clash"}
+      ]
+    },
+    {
+      "ts": "02:40:46",
+      "claim": "韩国靠AI记忆芯片（SK海力士、三星）赚爆，但整体表现仍不如台湾",
+      "verdict": "ok",
+      "basis": "韩国央行2026-08-27将2026全年GDP预测上调至3.3%；台湾主计总处2026-08-14将预测上调至11.05%，两者相差近8个百分点，台湾显著更高，方向成立。SK海力士2026年Q1营收同比+198%、Q2营业利润率约76%，HBM全球市占约57%，『记忆芯片赚爆』属实，但公司层面暴利未能拉动韩国整体GDP追平台湾。",
+      "links": [
+        {"t": "Korea JoongAng Daily BOK上修预测", "url": "https://www.koreajoongangdaily.com/business/bok-raises-korea-growth-outlook-to-33-on-strong-chip-exports/12847113"},
+        {"t": "中央社 台湾预测上修11.05%", "url": "https://www.cna.com.tw/news/afe/202608140300.aspx"},
+        {"t": "CNBC SK海力士获利", "url": "https://www.cnbc.com/2026/04/23/sk-hynix-earnings-ai-memory-shortage-hbm-demand.html"},
+        {"t": "SK hynix Q2 2026官方业绩", "url": "https://news.skhynix.com/en/q2-2026-business-results/"}
+      ]
+    },
+    {
+      "ts": "02:53:28",
+      "claim": "国民党到台初期靠美援（美元、面粉、教育）一穷二白；瓜哥纠正：老蒋带了很多黄金",
+      "verdict": "ok",
+      "basis": "两人说的是同一段历史的不同阶段，都对，不是非此即彼：1948–1949年运台黄金约400万两左右（学者吴兴镛考证），但据1950年6月央行总裁向蒋报告，运台库存金已耗掉321万余两（主要用于军费），仅剩约54万两；黄金撑住了1949–1950最初的政权稳定与新台币发行准备。1951–1965年美援经济部分约14.8–15亿美元（另有约42.2亿美元军援），韩战爆发后接续支撑了此后15年的经济建设。",
+      "links": [
+        {"t": "文汇报读书周报", "url": "https://www.whb.cn/zhuzhan/dushu/20180131/188274.html"},
+        {"t": "新浪 蒋介石运台黄金揭秘", "url": "http://style.sina.com.cn/news/p/2011-04-15/071376588.shtml"},
+        {"t": "老辰光 运台黄金史料（含央行1950年6月报告）", "url": "http://myoldtime.com/m/view.php?aid=21768"},
+        {"t": "维基百科「美援」", "url": "https://zh.wikipedia.org/wiki/%E7%BE%8E%E6%8F%B4"},
+        {"t": "风传媒 汪浩", "url": "https://www.storm.mg/article/452020"}
+      ]
+    },
+    {
+      "ts": "02:56:35",
+      "claim": "蒋经国在苏联留学很长时间",
+      "verdict": "ok",
+      "basis": "蒋经国1925年10月19日赴莫斯科，1937年3月25日携妻儿返国，共约12年，『很长时间』表述准确。",
+      "links": [
+        {"t": "维基百科「蒋经国」", "url": "https://zh.wikipedia.org/wiki/%E8%94%A3%E7%B6%93%E5%9C%8B"},
+        {"t": "新浪 蒋经国留苏12年", "url": "https://news.sina.com.cn/c/sd/2009-04-23/093717671298.shtml"}
+      ]
+    },
+    {
+      "ts": "02:31:01",
+      "claim": "（瓜哥自标『以讹传讹』）西班牙边境开放，6万摩洛哥人攻占休达",
+      "verdict": "warn",
+      "basis": "事件是真的，规模量级也对得上，瓜哥自己的『以讹传讹』标注反而是误判：2026年7月30–31日休达确实发生历史性大规模越境，西班牙政府统计约4.9万人24小时内进入，休达市长估计6万人，综合估计约8万人，至少111人死亡。『6万人』落在市长估计区间内，不是编造谣言；但瓜哥完全没提到死亡人数这个关键代价，且把真实重大事件误判为假消息。",
+      "links": [
+        {"t": "维基百科 2026 Morocco–Spain border incident", "url": "https://en.wikipedia.org/wiki/2026_Morocco%E2%80%93Spain_border_incident"},
+        {"t": "CNN 2026-08-01", "url": "https://www.cnn.com/2026/08/01/europe/spain-morocco-migrants-intl"},
+        {"t": "NPR 2026-08-16", "url": "https://www.npr.org/2026/08/16/nx-s1-5927053/what-happened-in-ceuta"},
+        {"t": "Al Jazeera 2026-08-02", "url": "https://www.aljazeera.com/features/2026/8/2/spanish-ceuta-witnesses-a-deadly-game-for-moroccan-migrants"},
+        {"t": "Al Jazeera 2021年背景事件（约8000人两天内越境）", "url": "https://www.aljazeera.com/news/2021/5/19/spain-moves-to-head-off-ceuta-migrant-and-refugee-crisis"}
+      ]
+    },
+    {
+      "ts": "02:34:10",
+      "claim": "德国自民党林德纳等人已被清除出政治核心；法拉奇、梅朗雄、AfD得势",
+      "verdict": "ok",
+      "basis": "林德纳确认出局：FDP在2025年2月联邦大选仅得4.3%，跌破5%门槛全部退出联邦议会，林德纳退出政坛转入汽车业。『法拉奇』应指英国改革党Nigel Farage：其政党Reform UK民调强势（2026年9月约24–28%，一度居首），但Farage本人2026年7月因政治献金丑闻辞去国会议员席位（后补选连任），个人净支持度一度跌至-27创本届最低——『党得势、人有争议』比直播说法更复杂。梅朗雄确认民调走强，2026年8月民调显示他有望挤进2027年总统选举第二轮（首轮约16–19%，仅次于勒庞）。AfD确认得势，2026年9月民调约27–28%，为该党历史最高水平。",
+      "links": [
+        {"t": "Bloomberg 林德纳退出政坛", "url": "https://www.bloomberg.com/news/articles/2025-02-23/germany-s-former-finance-minister-lindner-ends-political-career"},
+        {"t": "维基百科 Christian Lindner", "url": "https://en.wikipedia.org/wiki/Christian_Lindner"},
+        {"t": "Al Jazeera Farage因献金丑闻辞职", "url": "https://www.aljazeera.com/news/2026/7/7/reform-uks-farage-resigns-as-mp-amid-funding-scandal-forcing-by-election"},
+        {"t": "britpolls Reform UK民调", "url": "https://britpolls.co.uk/news/reform-uk-polling-surge/"},
+        {"t": "France24 梅朗雄民调", "url": "https://www.france24.com/en/live-news/20260824-french-poll-shows-le-pen-s-biggest-challenger-may-be-hard-left-s-melenchon"},
+        {"t": "US News 梅朗雄", "url": "https://www.usnews.com/news/world/articles/2026-08-24/french-far-left-leader-melenchon-seen-reaching-presidential-runoff-poll-shows"},
+        {"t": "PolitPro AfD民调", "url": "https://politpro.eu/en/germany/political-parties/afd"},
+        {"t": "Brussels Signal AfD历史新高", "url": "https://brusselssignal.eu/2026/01/afd-reaches-biggest-ever-lead-over-cdu-in-nationwide-poll-set-to-win-two-state-elections-in-2026/"}
+      ]
+    },
+    {
+      "ts": "02:47:55",
+      "claim": "『香蕉共和国』指美国透过经济控管（而非直接殖民）支配中南美国家",
+      "verdict": "ok",
+      "basis": "词源准确：源自作家欧·亨利1904年小说集《卷心菜与国王》中虚构国度Anchuria（原型洪都拉斯），指依赖单一农产品出口、被外国企业（以联合果品公司为代表）实际控制政治经济命脉的国家，历史上确有1954年美方支持推翻危地马拉民选政府、1928年哥伦比亚香蕉大屠杀等案例，符合『经济控管而非直接殖民』的学界通行定义。",
+      "links": [
+        {"t": "Smithsonian Magazine", "url": "https://www.smithsonianmag.com/smart-news/where-we-got-term-banana-republic-180961813/"},
+        {"t": "Britannica", "url": "https://www.britannica.com/topic/banana-republic"},
+        {"t": "Merriam-Webster", "url": "https://www.merriam-webster.com/wordplay/banana-republic-word-history"}
+      ]
+    },
+    {
+      "ts": "02:39:19",
+      "claim": "『2026年是8.76%』",
+      "verdict": "bad",
+      "basis": "8.76%实际是台湾2025年全年GDP成长率（由8.68%上修而来，路透社2026-05-29报道『AI需求带动，创15年新高』），并非2026年的数字——这与历史哥自己在同一场直播里说的『去年8点多%』（即2025年）指向同一个数字，说明他把2025年的数字错贴上了『2026年』标签。",
+      "links": [
+        {"t": "Investing.com/路透 台湾2026预测上修至9.64%（文中含2025年8.76%数字）", "url": "https://www.investing.com/news/economic-indicators/taiwan-raises-2026-gdp-growth-outlook-to-964-4716080"},
+        {"t": "Yahoo Finance 同源报道", "url": "https://finance.yahoo.com/economy/articles/taiwan-raises-2026-gdp-growth-084506249.html"}
+      ]
+    }
+  ],
+  "support": [
+    {
+      "text": "台湾出口集中度创纪录：2026年8月出口821亿美元（同比+41%，连续34个月正增长），信息通讯+视听产品+电子零组件合计占出口总额78.7%，为历史极端集中水平。",
+      "links": [{"t": "Taipei Times", "url": "https://www.taipeitimes.com/News/biz/archives/2026/09/10/2003863978"}]
+    },
+    {
+      "text": "产业内部分配悬殊：2025年台积电员工全年分红2061.46亿新台币，人均约264万新台币；同期约69.74%（约400万）劳工月薪中位数仅3.99万新台币，该低薪占比从2022年68.6%逐年升至2025年69.74%。",
+      "links": [{"t": "虎嗅网", "url": "https://www.huxiu.com/article/4875109.html"}]
+    },
+    {
+      "text": "半导体产业独大：2025年台湾经济增长7.37%（15年新高），半导体占出口约40%、资通讯产品占出口74%（创历史新高）；同期传统制造业出口下滑（如自行车业出口降30%），叠加美国15%关税与新台币升值双重挤压。",
+      "links": [{"t": "虎嗅网", "url": "https://www.huxiu.com/article/4837527.html"}]
+    }
+  ],
+  "against": [
+    {
+      "text": "官方数据显示薪资增长其实广泛存在、非仅限科技业：2025年前11个月经常性薪资名目成长3.09%，为26年来同期最快；11月实质薪资成长2.34%，数据涵盖住宿餐饮、传统制造业、金融保险等非科技部门。",
+      "links": [{"t": "Taiwan News", "url": "https://www.taiwannews.com.tw/news/6281532"}]
+    },
+    {
+      "text": "就业市场整体强劲：2026年第一季失业率3.34%，创25年来新低，显示AI热潮并未把非科技部门挤出就业市场（原文经AmCham摘要转述，原网页403未能直接核实全文）。",
+      "links": [{"t": "AmCham Taiwan Business TOPICS", "url": "https://topics.amcham.com.tw/2026/08/macroeconomic-brief-august-2026/"}]
+    },
+    {
+      "text": "民众对经济评价其实在回升：台湾励志协会2026年7月民调显示56%民众认为整体经济『好』，创六波追踪调查新高，说明『民众不满强度很高』可能只反映某一时点/议题（如电力、食安），不宜一概而论为对经济整体高度不满。",
+      "links": [{"t": "大纪元", "url": "https://www.epochtimes.com/gb/26/7/27/n14818158.htm"}]
+    },
+    {
+      "text": "『硅盾能否降低战争风险』本身存在严肃反驳：台积电前董事长刘德音在《纽约时报》表示中国是否动武与半导体无关，完全取决于美中如何维持现状；《芯片战争》作者Chris Miller认为硅盾『会反噬』，半导体集中反而可能是北京想拿下台湾的诱因而非阻力，即便代价巨大也可能不改变其统一意图。",
+      "links": [
+        {"t": "AEI, Chris Miller", "url": "https://www.aei.org/articles/global-fight-for-chips-the-silicon-shield-wont-protect-taiwan-from-a-chinese-invasion/"},
+        {"t": "美国之音（含刘德音NYT言论转述）", "url": "https://www.voachinese.com/a/silicon-shield-protect-Taiwan-against-China-s-aggression-20210507/5881804.html"}
+      ]
+    }
+  ],
+  "history": {
+    "precedent": "诺基亚之于芬兰，是『霸权供应链里小型经济体靠单一企业高增长』的教科书案例。1998–2007年诺基亚全盛期，一家企业贡献芬兰GDP增长的四分之一，出口占比近20%，经常账户盈余一度达GDP近7%，纳税占全芬兰企业所得税收入的23%，2000年高峰单一企业贡献芬兰GDP年增量4个百分点。2007年iPhone发布，诺基亚未能跟上智能机转型，手机业务迅速崩溃，出口腰斩，经常账户由盈转亏；2009年芬兰GDP暴跌逾8%，其中近三分之一可归因于诺基亚一家企业的衰退。此后芬兰陷入长达十余年经济停滞，2008–2019年人均实际收入持续下滑，直到近年才逐步转向游戏、林业科技、清洁能源等多元产业走出『诺基亚阴影』。这段历史提示：单一产业带来的繁荣具有极强脆弱性，一旦遭遇技术代际转移，宏观经济会同步硬着陆，修复期以十年计。",
+    "thenNow": [
+      ["依赖产业/企业", "单一企业诺基亚（手机）", "单一企业台积电（先进制程晶圆代工）"],
+      ["占GDP/出口比重", "出口占比近20%（峰值）；单季贡献GDP增量4个百分点", "资通讯+电子零组件占出口78.7%（2026/8）；半导体占出口约40%（2025）"],
+      ["外部冲击来源", "技术代际转移（iPhone颠覆功能机）", "地缘政治风险（两岸冲突）+ AI需求可持续性的技术路线风险"],
+      ["社会/宏观表现", "冲击后出口腰斩、经常账户转赤字、2009年GDP暴跌逾8%、十余年停滞", "目前仍处繁荣期，但已现食安/分配抗议、科技与传统产业薪资分化等社会摩擦信号"],
+      ["后续结果", "十余年结构性衰退，后转型多元（游戏、林业科技、清洁能源）", "尚未发生，属尚待验证的风险情景"]
+    ],
+    "readings": [
+      {"title": "The 'Silicon Shield' Won't Protect Taiwan from a Chinese Invasion", "by": "Chris Miller, AEI", "url": "https://www.aei.org/articles/global-fight-for-chips-the-silicon-shield-wont-protect-taiwan-from-a-chinese-invasion/", "why": "《芯片战争》作者本人对『硅盾=避战』逻辑的正面反驳，直接对应两人『增长维持和平』的核心假设"},
+      {"title": "Silicon Island: Assessing Taiwan's Importance to U.S. Economic Growth and Security", "by": "William Alan Reinsch & Jack Whitney, CSIS", "url": "https://www.csis.org/analysis/silicon-island-assessing-taiwans-importance-us-economic-growth-and-security", "why": "系统分析台湾『不可替代性』与『关键脆弱点』的双重属性，含23,100家美企依赖台湾供应链的数据"},
+      {"title": "Taiwan's Semiconductor Dominance: Implications for Cross-Strait Relations and the Prospect of Forceful Unification", "by": "CSIS, Perspectives on Innovation", "url": "https://www.csis.org/blogs/perspectives-innovation/taiwans-semiconductor-dominance-implications-cross-strait-relations", "why": "专门讨论半导体主导地位与武统概率的关系，直接对应『芯片共和国』论的地缘政治部分"},
+      {"title": "The Nokia Risk", "by": "Herman Mark Schwartz, Phenomenal World", "url": "https://phenomenalworld.org/analysis/nokia-risk/", "why": "系统梳理小型开放经济体绑定单一企业的结构性风险，本次用作历史先例的核心文章"}
+    ]
+  },
+  "sources": [
+    {"t": "台商网 2025年GDP实际成长率", "url": "https://tbotaiwan.com/growth-rate-of-real-gdp-taiwan-2025/"},
+    {"t": "大纪元 2026上半年平均13.72%", "url": "https://www.epochtimes.com/gb/26/7/31/n14821099.htm"},
+    {"t": "中央社 Q2概估12.92%", "url": "https://www.cna.com.tw/news/afe/202607310205.aspx"},
+    {"t": "桃园电子报 5/29预测9.64%", "url": "https://taronews.tw/2026/05/29/1194272/"},
+    {"t": "Focus Taiwan 8/17上修11.05%", "url": "https://japan.focustaiwan.tw/economy/202608170004"},
+    {"t": "维基百科「我是人，我反毒台」游行", "url": "https://zh.wikipedia.org/wiki/%E3%80%8C%E6%88%91%E6%98%AF%E4%BA%BA%EF%BC%8C%E6%88%91%E5%8F%8D%E6%AF%92%E5%8F%B0%E3%80%8D%E9%81%8A%E8%A1%8C"},
+    {"t": "台海网 报道", "url": "https://www.itaiwannews.cn/2026-07-27/51e7d1a9-ac1e-423f-a06b-29b2c931384f.html"},
+    {"t": "Focus Taiwan 反核三延役集会约百余人", "url": "https://focustaiwan.tw/society/202508160014"},
+    {"t": "英为财情 台积电亚利桑那产能", "url": "https://cn.investing.com/news/stock-market-news/article-2531899"},
+    {"t": "Arizona Tech Council Fab21已量产4nm", "url": "https://www.aztechcouncil.org/tsmc-arizona-fab21-already-making-4nm-chips/"},
+    {"t": "新浪财经 台积电亚利桑那", "url": "https://finance.sina.com.cn/tech/roll/2024-12-30/doc-inecfkur2465185.shtml"},
+    {"t": "Tom's Hardware 美台工程师文化冲突", "url": "https://www.tomshardware.com/news/tsmc-continues-working-through-us-staff-culture-clash"},
+    {"t": "Korea JoongAng Daily BOK上修预测", "url": "https://www.koreajoongangdaily.com/business/bok-raises-korea-growth-outlook-to-33-on-strong-chip-exports/12847113"},
+    {"t": "中央社 台湾预测上修11.05%", "url": "https://www.cna.com.tw/news/afe/202608140300.aspx"},
+    {"t": "Newtalk新闻 台湾预测上修", "url": "https://newtalk.tw/news/view/2026-08-14/1053465"},
+    {"t": "CNBC SK海力士获利", "url": "https://www.cnbc.com/2026/04/23/sk-hynix-earnings-ai-memory-shortage-hbm-demand.html"},
+    {"t": "SK hynix Q2 2026官方业绩", "url": "https://news.skhynix.com/en/q2-2026-business-results/"},
+    {"t": "文汇报读书周报", "url": "https://www.whb.cn/zhuzhan/dushu/20180131/188274.html"},
+    {"t": "新浪 蒋介石运台黄金揭秘", "url": "http://style.sina.com.cn/news/p/2011-04-15/071376588.shtml"},
+    {"t": "老辰光 运台黄金史料", "url": "http://myoldtime.com/m/view.php?aid=21768"},
+    {"t": "维基百科「美援」", "url": "https://zh.wikipedia.org/wiki/%E7%BE%8E%E6%8F%B4"},
+    {"t": "风传媒 汪浩", "url": "https://www.storm.mg/article/452020"},
+    {"t": "维基百科「蒋经国」", "url": "https://zh.wikipedia.org/wiki/%E8%94%A3%E7%B6%93%E5%9C%8B"},
+    {"t": "新浪 蒋经国留苏12年", "url": "https://news.sina.com.cn/c/sd/2009-04-23/093717671298.shtml"},
+    {"t": "维基百科 2026 Morocco–Spain border incident", "url": "https://en.wikipedia.org/wiki/2026_Morocco%E2%80%93Spain_border_incident"},
+    {"t": "CNN 2026-08-01 休达事件", "url": "https://www.cnn.com/2026/08/01/europe/spain-morocco-migrants-intl"},
+    {"t": "NPR 2026-08-16 休达事件回顾", "url": "https://www.npr.org/2026/08/16/nx-s1-5927053/what-happened-in-ceuta"},
+    {"t": "Al Jazeera 2026-08-02 休达事件", "url": "https://www.aljazeera.com/features/2026/8/2/spanish-ceuta-witnesses-a-deadly-game-for-moroccan-migrants"},
+    {"t": "Al Jazeera 2021年休达事件背景", "url": "https://www.aljazeera.com/news/2021/5/19/spain-moves-to-head-off-ceuta-migrant-and-refugee-crisis"},
+    {"t": "Bloomberg 林德纳退出政坛", "url": "https://www.bloomberg.com/news/articles/2025-02-23/germany-s-former-finance-minister-lindner-ends-political-career"},
+    {"t": "维基百科 Christian Lindner", "url": "https://en.wikipedia.org/wiki/Christian_Lindner"},
+    {"t": "Al Jazeera Farage因献金丑闻辞职", "url": "https://www.aljazeera.com/news/2026/7/7/reform-uks-farage-resigns-as-mp-amid-funding-scandal-forcing-by-election"},
+    {"t": "britpolls Reform UK民调", "url": "https://britpolls.co.uk/news/reform-uk-polling-surge/"},
+    {"t": "France24 梅朗雄民调", "url": "https://www.france24.com/en/live-news/20260824-french-poll-shows-le-pen-s-biggest-challenger-may-be-hard-left-s-melenchon"},
+    {"t": "US News 梅朗雄", "url": "https://www.usnews.com/news/world/articles/2026-08-24/french-far-left-leader-melenchon-seen-reaching-presidential-runoff-poll-shows"},
+    {"t": "PolitPro AfD民调", "url": "https://politpro.eu/en/germany/political-parties/afd"},
+    {"t": "Brussels Signal AfD历史新高", "url": "https://brusselssignal.eu/2026/01/afd-reaches-biggest-ever-lead-over-cdu-in-nationwide-poll-set-to-win-two-state-elections-in-2026/"},
+    {"t": "Smithsonian Magazine 香蕉共和国词源", "url": "https://www.smithsonianmag.com/smart-news/where-we-got-term-banana-republic-180961813/"},
+    {"t": "Britannica 香蕉共和国", "url": "https://www.britannica.com/topic/banana-republic"},
+    {"t": "Merriam-Webster 香蕉共和国词源", "url": "https://www.merriam-webster.com/wordplay/banana-republic-word-history"},
+    {"t": "Investing.com/路透 台湾2026预测上修964", "url": "https://www.investing.com/news/economic-indicators/taiwan-raises-2026-gdp-growth-outlook-to-964-4716080"},
+    {"t": "Yahoo Finance 同源报道", "url": "https://finance.yahoo.com/economy/articles/taiwan-raises-2026-gdp-growth-084506249.html"},
+    {"t": "Taipei Times 出口集中度", "url": "https://www.taipeitimes.com/News/biz/archives/2026/09/10/2003863978"},
+    {"t": "虎嗅网 台积电分红vs劳工薪资", "url": "https://www.huxiu.com/article/4875109.html"},
+    {"t": "虎嗅网 半导体产业独大", "url": "https://www.huxiu.com/article/4837527.html"},
+    {"t": "Taiwan News 26年来最快薪资成长", "url": "https://www.taiwannews.com.tw/news/6281532"},
+    {"t": "AmCham Taiwan Business TOPICS", "url": "https://topics.amcham.com.tw/2026/08/macroeconomic-brief-august-2026/"},
+    {"t": "大纪元 经济满意度民调回升", "url": "https://www.epochtimes.com/gb/26/7/27/n14818158.htm"},
+    {"t": "AEI, Chris Miller 硅盾反驳", "url": "https://www.aei.org/articles/global-fight-for-chips-the-silicon-shield-wont-protect-taiwan-from-a-chinese-invasion/"},
+    {"t": "美国之音 硅盾避战报道", "url": "https://www.voachinese.com/a/silicon-shield-protect-Taiwan-against-China-s-aggression-20210507/5881804.html"},
+    {"t": "CSIS Silicon Island", "url": "https://www.csis.org/analysis/silicon-island-assessing-taiwans-importance-us-economic-growth-and-security"},
+    {"t": "CSIS 半导体主导地位与武统", "url": "https://www.csis.org/blogs/perspectives-innovation/taiwans-semiconductor-dominance-implications-cross-strait-relations"},
+    {"t": "Phenomenal World, The Nokia Risk", "url": "https://phenomenalworld.org/analysis/nokia-risk/"}
+  ],
+  "note": "核查边界与需人工二次确认之处：(1) 1949年运台黄金具体数字各史料有争议（250万–450万两不等区间均有学者引用），本次只取吴兴镛研究与当事人档案两个较权威来源交叉印证，未穷尽所有版本；(2) AfD 2026年最新民调用PolitPro（聚合站）验证，未用德国本土机构（Forsa/INSA/Infratest dimap）原始数据交叉核实，建议正式使用前再查一次；(3) Nigel Farage（『法拉奇』）政党Reform UK民调强势与他本人2026年7月因献金丑闻辞职、个人支持度创新低是两件不同的事，瓜哥『得势』一词把两者混在一起说，实际更复杂；(4) 台积电『贡献台湾约8% GDP』『占台股市值44.3%』等数字仅见于中文财经媒体搜索摘要，未逐一打开核实原始出处，未采纳入deviations，仅供参考；(5) AmCham Taiwan Business TOPICS原网页返回403，失业率3.34%数字系转述搜索摘要，未直接核实全文；(6) 历史先例候选中'1986年美日半导体协议后日本DRAM产业兴衰'因产业主体是多家企业+国家产业政策博弈、与'单一企业绑定小型经济体'贴合度不如诺基亚案例，故最终未展开使用，只用了诺基亚/芬兰一例；如需可另行补查日本DRAM案例作对照。"
+}

@@ -1,0 +1,197 @@
+{
+  "event": "A",
+  "overall": "warn",
+  "deviations": [
+    {
+      "ts": "01:05:31",
+      "claim": "过去100年中期选举共25次，执政党保住参众两院的只有4次",
+      "verdict": "warn",
+      "basis": "「25次」算术成立：100年÷4年一轮中期选举≈25次（1926–2022正好25次）。但「只有4次保住两院」这个精确数字无法用单一权威来源复核——不同口径给出不同答案。若按「两院都未净失席位」算，常被举出的是1934、1998、2002三次；但1998年国会选前就由共和党掌控（克林顿民主党选前并未掌两院，谈不上「保住」），2002年参议院选前也在民主党手里（2001年Jeffords倒戈后），共和党是「夺回」而非「保住」。若按更严格的「选前选后都是执政党多数」，明确成立的只有1934、1962两次。总体「执政党保住两院极罕见」方向正确，但「25选4」这个比例缺乏可直接对应的单一信源，需人工确认瓜哥的具体统计口径。",
+      "links": [
+        {"t": "Constitution Center: How midterm elections have changed Congress since 1946", "url": "https://constitutioncenter.org/blog/how-midterm-elections-have-changed-congress-since-1946"},
+        {"t": "The Conversation/Washington Post: For 80 years, the president's party has almost always lost House seats in midterms", "url": "https://www.washingtonpost.com/ripple/2026/01/19/for-80-years-the-presidents-party-has-almost-always-lost-house-seats-in-midterm-elections-a-pattern-that-makes-the/"}
+      ]
+    },
+    {
+      "ts": "01:07:30",
+      "claim": "重划选区后共和党稳赢选区接近200–210席；众议院过半门槛218席",
+      "verdict": "ok",
+      "basis": "Cook Political Report 2026年8月25日更新的评级：Solid Republican 182席，加上Likely/Lean Republican 27席，合计约209席，与「接近200–210」吻合；众议院过半门槛确为218席（435席之半+1），当前众院实际席位为共和党218、民主党214、另有2席空缺（截至2026年8月31日）。需注意：这209席的数字已经反映了加州Prop 50民主党反向重划抵消得州增量之后的净结果，并非「红方单方面碾压」的画面。",
+      "links": [
+        {"t": "Cook Political Report: Introducing the 2026 Cook PVI", "url": "https://www.cookpolitical.com/cook-pvi/introducing-2026-cook-pvi-re-redistricting-yields-more-republican-less-elastic-house-map"},
+        {"t": "270toWin: 2026 House Election Interactive Map", "url": "https://www.270towin.com/2026-house-election/"}
+      ]
+    },
+    {
+      "ts": "01:08:30",
+      "claim": "本届参议院改选33席中三分之二以上是共和党优势席位（历史哥：22席在共和党州）",
+      "verdict": "warn",
+      "basis": "2026年参议院改选共35席：33个常规第二类（Class II，20共和党/13民主党）+2个特别选举（佛州、俄亥俄州，均现由共和党人持有）。共和党需守22席（20+2），民主党守13席。22/35≈62.9%，若只算33个常规席位则20/33≈60.6%，两种算法都未达到「三分之二以上」（66.7%），但确实接近六成以上——方向对、幅度略夸大。历史哥说的「22席」这一具体数字准确无误。",
+      "links": [
+        {"t": "Wikipedia: 2026 United States Senate elections", "url": "https://en.wikipedia.org/wiki/2026_United_States_Senate_elections"}
+      ]
+    },
+    {
+      "ts": "01:11:17",
+      "claim": "川普当前民调支持率是福特以来历届总统中最高的一位",
+      "verdict": "bad",
+      "basis": "与事实相反。2026年9月多份民调：Reuters/Ipsos 33%支持、CNN/SSRS 34%、Financial Times/Focaldata 33%（为该机构自5月以来最低），另一主流追踪显示38.1%支持/58.1%反对（净-20）。Pew Research 2026年8月6日报告明确写道「川普的支持率按历史标准衡量处于低位」，且低于近代大多数总统在相近任期节点的支持率（如与拜登2022年同期相当，低于其他大多数近代总统）。这正是题目怀疑的「说反了」——应为「较低/接近历史最低」而非「最高」。",
+      "links": [
+        {"t": "Pew Research: Trump's job approval rating is low by historical standards", "url": "https://www.pewresearch.org/short-reads/2026/08/06/trumps-job-approval-rating-is-low-by-historical-standards/"},
+        {"t": "Forbes: Trump Approval Rating: Sinks To Low Points In 2 Latest Polls", "url": "https://www.forbes.com/sites/saradorn/2026/09/08/trumps-approval-rating-reaches-new-floors-in-2-polls-as-support-among-gop-voters-slips/"},
+        {"t": "uspollingdata.com: Trump Approval Rating 2026 Monthly Tracker", "url": "https://uspollingdata.com/polls/trump-approval/"}
+      ]
+    },
+    {
+      "ts": "01:11:47",
+      "claim": "1933年希特勒只有33%选票却拿到议会70%以上席位",
+      "verdict": "bad",
+      "basis": "混淆了年份、得票率、席位比例三件事。33.1%得票率出现在1932年11月选举（非1933年），当时获196/584席，约33.6%的席位——魏玛德国是比例代表制，席位比例基本等于得票比例，并非70%以上。1933年3月的选举纳粹党得票43.9%，获288/647席（约44.5%），同样远未到70%。历史上没有一次选举是「33%选票换来70%以上席位」的结果；纳粹后来在国会里的绝对优势是靠1933年取缔共产党议席、通过《授权法》等非选举手段（恐吓与暴力下的政治操作）达成的，不是任何一次投票本身的比例结果。",
+      "links": [
+        {"t": "Wikipedia: November 1932 German federal election", "url": "https://en.wikipedia.org/wiki/November_1932_German_federal_election"},
+        {"t": "Wikipedia: March 1933 German federal election", "url": "https://en.wikipedia.org/wiki/March_1933_German_federal_election"},
+        {"t": "Zachor Foundation: Nazis Take 33.1 Percent of Vote in Reichstag Elections", "url": "https://www.zachorfoundation.org/timeline/nazis-take-331-percent-of-vote-in-reichstag-elections/"}
+      ]
+    },
+    {
+      "ts": "01:08:30",
+      "claim": "川普推动「真实投票权法案」，用Real ID区分把办不起驾照的穷人和非法移民排除出投票",
+      "verdict": "warn",
+      "basis": "应指SAVE Act（Safeguard American Voter Eligibility Act）。众议院已于2026年2月11日以218-213通过，但截至2026年9月参议院仍未通过（6月称「远未凑够票数」，8月休会前又一次未能突破阻挠议事），尚未成为法律——是「在推」而非已经推成。内容上，SAVE Act要求的是登记投票时出示「文件证明公民身份」（护照或出生证明），而非「Real ID」本身：多份信源（含事实核查）明确指出，标准版Real ID驾照并不能单独证明公民身份、不满足该法案要求，只有5个州签发的「强化版驾照」（Enhanced Driver's License）例外。所以把它简化描述为「用Real ID区分」存在概念混淆；「排除办不起证件的穷人」这一担忧是真实存在的批评意见，但准确落脚点是「公民身份文件」（出生证明/护照）而非驾照/Real ID。",
+      "links": [
+        {"t": "Ballotpedia News: Senate takes up SAVE America Act", "url": "https://news.ballotpedia.org/2026/03/25/senate-takes-up-save-america-act-to-require-voter-id-proof-of-citizenship-for-federal-elections/"},
+        {"t": "National Law Review: SAVE Act Does Not Permit Use of Standard REAL ID as Proof of Citizenship", "url": "https://natlawreview.com/press-releases/save-act-does-not-permit-use-standard-real-id-proof-citizenship-voter"},
+        {"t": "WRAL Fact check: Can you use REAL ID to register to vote under GOP bill?", "url": "https://www.wral.com/story/fact-check-can-you-use-real-id-to-register-to-vote-under-gop-bill/21992858/"}
+      ]
+    },
+    {
+      "ts": "01:07:00",
+      "claim": "川普要求幕僚推动中期选举前的选区重划，南方多州在做",
+      "verdict": "warn",
+      "basis": "属实但不完整。2025年夏天以来至少10个州完成了国会选区重划（阿拉巴马、加州、佛罗里达、路易斯安那、密苏里、北卡罗来纳、俄亥俄、田纳西、得州、犹他），是自19世纪以来最密集的一轮中期重划；得州预期净增约5席、密苏里+1席、俄亥俄由10R-5D变为12R-3D。但「南方多州在做」只是故事的一半：加州（民主党主导）以近65%支持率通过Prop 50反向重划，预计让至多5席翻蓝，基本抵消得州的增量；犹他的重划则是法院依「反гerrymander法」强制出的、对民主党有利的地图，被联邦法院驳回共和党的阻止申请。所以净效果被部分对冲，不是单向的南方共和党重划。",
+      "links": [
+        {"t": "MultiState: Mid-Decade Redistricting Returns as States Abandon Century-Old Norms", "url": "https://www.multistate.us/insider/2025/9/2/mid-decade-redistricting-returns-as-states-abandon-century-old-norms"},
+        {"t": "CalMatters: California voters approve Prop. 50", "url": "https://calmatters.org/politics/2025/11/proposition-50-newsom-election-day/"},
+        {"t": "NBC/KSL: Federal court declines to block Utah's court-ordered congressional map", "url": "https://www.ksl.com/article/51452527/federal-court-now-declines-to-block-utahs-new-congressional-map"}
+      ]
+    },
+    {
+      "ts": "01:04:02",
+      "claim": "格林厄姆参议员去世，参议院想推一项以他命名的对俄制裁法案",
+      "verdict": "ok",
+      "basis": "共和党参议员Lindsey Graham（南卡）于2026年7月11日「突发急病」去世，享年71岁（初步医学报告为主动脉夹层），去世前一天刚结束访乌行程。2026年8月7日参议院以86-11的票数通过了以他命名的《Lindsey O. Graham Sanctioning Russia and Iran Act of 2026》，旨在制裁购买俄罗斯石油天然气的国家（对俄油气前五大买家最高征收100%关税，含中国、印度），并制裁俄罗斯领导层及寡头。",
+      "links": [
+        {"t": "Washington Post: Lindsey Graham dies of aortic dissection, preliminary medical report says", "url": "https://www.washingtonpost.com/politics/2026/07/12/lindsey-graham-longtime-south-carolina-senator-dies-71/"},
+        {"t": "CNBC: Russia sanctions bill honoring Lindsey Graham breezes through Senate", "url": "https://www.cnbc.com/2026/08/07/russia-sanctions-bill-lindsey-graham-senate.html"},
+        {"t": "Congress.gov: S.5025 - Lindsey O. Graham Sanctioning Russia Act of 2026", "url": "https://www.congress.gov/bill/119th-congress/senate-bill/5025/text"}
+      ]
+    },
+    {
+      "ts": "01:07:00",
+      "claim": "川普访华是为中期选举缓和矛盾（只核对是否访华、何时）",
+      "verdict": "ok",
+      "basis": "川普于2026年5月13日至15日对中国进行国事访问，应习近平邀请赴北京，与习近平在人民大会堂举行会谈，双方宣布建立「建设性、稳定的战略关系」。这是川普第二任期内首次访华，也是近九年来美国总统首次访华。本条只核实「是否访华、何时访华」这一事实层面，访华与中期选举的因果动机不在核查范围内、未判断。",
+      "links": [
+        {"t": "Wikipedia: 2026 state visit by Donald Trump to China", "url": "https://en.wikipedia.org/wiki/2026_state_visit_by_Donald_Trump_to_China"},
+        {"t": "CNN: Trump arrives in China for summit with Xi Jinping", "url": "https://www.cnn.com/2026/05/13/politics/live-news/trump-china-visit-arrival-ceremony-hnk"}
+      ]
+    },
+    {
+      "ts": "01:16:56",
+      "claim": "参议院要变天民主党需净增4席；德州只可能影响1席",
+      "verdict": "ok",
+      "basis": "2024年大选后参议院为共和党53席、民主党45席（另2名独立议员与民主党团），民主党要夺回参议院多数需净增4席，这是各选情分析机构的共识数字。得州2026年只有1个参议院席位改选（现任Cornyn的第二类席位），按定义任何单一州在当年改选周期内最多只能影响其改选的席位数，故「得州只可能影响1席」在数学上成立；得州虽因加州人口迁入选情略有松动，但仍被列为共和党守住概率较高的席位之一。",
+      "links": [
+        {"t": "NPR: 2026 Senate races to watch", "url": "https://www.npr.org/2026/05/02/nx-s1-5806271/2026-midterm-elections-control-senate-race"},
+        {"t": "Slate: Can Democrats take control by flipping North Carolina, Ohio, Maine, and Texas?", "url": "https://slate.com/news-and-politics/2026/09/midterms-senate-control-democrats.html"}
+      ]
+    }
+  ],
+  "support": [
+    {
+      "text": "Cook Political Report的2026 Cook PVI分析显示，重划后众议院地图中位数选区PVI比上一周期红了2个点（R+3），地图整体「更偏共和党、弹性更小」——即摇摆区数量在减少，对共和党系统性有利。",
+      "links": [{"t": "Cook Political Report: Introducing the 2026 Cook PVI", "url": "https://www.cookpolitical.com/cook-pvi/introducing-2026-cook-pvi-re-redistricting-yields-more-republican-less-elastic-house-map"}]
+    },
+    {
+      "text": "2025年夏天以来至少10个州完成国会选区重划，是自19世纪以来最密集的一轮中期重划，规模和同步程度前所未见。",
+      "links": [{"t": "MultiState: Mid-Decade Redistricting Returns as States Abandon Century-Old Norms", "url": "https://www.multistate.us/insider/2025/9/2/mid-decade-redistricting-returns-as-states-abandon-century-old-norms"}]
+    },
+    {
+      "text": "Center for American Progress和Just Security的系统性分析指出，川普政府在选举安全、选民数据索取、部署所谓「选举诚信大军」监督投票站等多条战线同步行动，模式与其他国家民主倒退时期的「重塑规则、重塑裁判、重塑信息环境」策略相似。",
+      "links": [
+        {"t": "CAP: The Trump Administration Is Interfering in the 2026 Midterm Elections", "url": "https://www.americanprogress.org/article/the-trump-administration-is-interfering-in-the-2026-midterm-elections-to-entrench-the-imperial-presidency/"},
+        {"t": "Just Security: The Trump Administration's Strategy for Reshaping Elections", "url": "https://www.justsecurity.org/133953/the-trump-administrations-strategy-for-reshaping-elections/"}
+      ]
+    },
+    {
+      "text": "SAVE Act（要求登记选民出示公民身份文件证明）已在众议院通过，川普及共和党领袖持续向参议院施压推动表决，方向符合「用投票资格门槛影响中期选举」的判断。",
+      "links": [{"t": "Ballotpedia News: Senate takes up SAVE America Act", "url": "https://news.ballotpedia.org/2026/03/25/senate-takes-up-save-america-act-to-require-voter-id-proof-of-citizenship-for-federal-elections/"}]
+    }
+  ],
+  "against": [
+    {
+      "text": "2026年9月的多份全国generic ballot民调一致显示民主党领先共和党约6-8个百分点，是近年少见的稳定优势幅度，与「共和党已系统性锁定优势」的印象相反。",
+      "links": [{"t": "Political Wire: Democrats Lead By 8 Points on the Generic Ballot", "url": "https://politicalwire.com/2026/09/04/democrats-lead-by-8-points-on-generic-ballot/"}]
+    },
+    {
+      "text": "2025年全年的特别选举中，民主党在约34场里跑赢共和党（平均超预期约4.5个百分点），并在弗吉尼亚、新泽西州长选举中大胜，显示基层选情并未因重划/选民资格收紧而被扭转。",
+      "links": [{"t": "Brookings: What do special elections mean for the midterm elections?", "url": "https://www.brookings.edu/articles/what-do-special-elections-mean-for-the-midterm-elections/"}]
+    },
+    {
+      "text": "重划选区并非共和党单方面得利：加州Prop 50通过后，预计让至多5席翻蓝，基本抵消得州新增的5席GOP优势；犹他的重划地图还是法院依当地反gerrymander法强制推出的、对民主党有利的版本，共和党试图阻止未果。",
+      "links": [{"t": "CalMatters: California voters approve Prop. 50", "url": "https://calmatters.org/politics/2025/11/proposition-50-newsom-election-day/"}]
+    },
+    {
+      "text": "川普支持率处于其二任期以来的历史低位（多份民调33%-38%区间），且在经济议题上民调恶劣（约71%不认可其经济治理），历史上总统支持率处于这一水平通常伴随执政党在中期选举中较大幅度失利。",
+      "links": [{"t": "Forbes: Trump Approval Rating: Sinks To Low Points In 2 Latest Polls", "url": "https://www.forbes.com/sites/saradorn/2026/09/08/trumps-approval-rating-reaches-new-floors-in-2-polls-as-support-among-gop-voters-slips/"}]
+    }
+  ],
+  "history": {
+    "precedent": "最贴切的历史先例是2003年得州「德雷选区重划」：2002年共和党拿下得州州议会全部控制权后，时任联邦众议院多数党领袖汤姆·德雷（Tom DeLay）推动一次不依赖人口普查、发生在十年周期中段的国会选区重划，把得州联邦众议员席位从17民主党/15共和党的格局重划为21共和党/11民主党，净改变约6席。民主党议员两度出走外州（俄克拉荷马、新墨西哥）阻止法定人数未果。案件最终打到联邦最高法院（LULAC v. Perry, 2006），最高法院基本维持了这次重划的合法性（仅因违反《投票权法》第2条撤销其中一个选区），确立了「中期重划本身不违反联邦法律」的先例，为2025-2026年这一轮多州同步中期重划提供了法律基础。不同的是，2003年是州级政治人物主导、单一州行动；这一轮是总统本人公开施压、至少10个州近乎同步展开，且民主党一方也以加州Prop 50反向重划应对，形成两党「军备竞赛」。",
+    "thenNow": [
+      ["推手", "德雷（众议院多数党领袖），非总统本人", "川普总统本人公开施压多州推动重划"],
+      ["涉及州数/同步性", "仅得州一地单独行动", "至少10个州近乎同步行动（得州/密苏里/俄亥俄/北卡/路易斯安那/阿拉巴马/田纳西/加州/犹他/佛州）"],
+      ["对立方反制", "民主党议员出走阻挠法定人数，未发起反向重划", "民主党以加州Prop 50等反向重划正面对冲，抵消部分红方增量"],
+      ["净议席改变规模", "得州一地净改变约6席（17D-15R→21R-11D）", "各方估计不一，得州潜在+5席，全国净效果因加州反制被大幅抵消，多份分析估计个位数到十余席不等"],
+      ["合法性检验", "2004年大选后实际生效，2006年最高法院基本维持合法性", "尚未经过2026年大选检验；犹他等多州诉讼仍在进行中"]
+    ],
+    "readings": [
+      {"title": "Introducing the 2026 Cook PVI: Re-Redistricting Yields a More Republican, Less Elastic House Map", "by": "Cook Political Report", "url": "https://www.cookpolitical.com/cook-pvi/introducing-2026-cook-pvi-re-redistricting-yields-more-republican-less-elastic-house-map", "why": "用量化的PVI指数衡量这轮重划到底把众议院地图推红了多少，是判断「稳赢200-210席」说法最直接的数据源"},
+      {"title": "The Trump Administration's Strategy for Reshaping Elections", "by": "Just Security", "url": "https://www.justsecurity.org/133953/the-trump-administrations-strategy-for-reshaping-elections/", "why": "把选区重划、SAVE Act、联邦介入选举安全等动作放进跨国「民主倒退」比较框架里通读，直接对应瓜哥归纳的「三个动作」整体判断，作者以长期观察外国民主倒退案例的视角写成"},
+      {"title": "Texas Messes with Democracy", "by": "Brennan Center for Justice", "url": "https://www.brennancenter.org/our-work/analysis-opinion/texas-messes-democracy", "why": "对得州2025年重划的法律与代表性影响做专门分析，是理解「有色人种选区缩小」这一说法的权威信源机构之一"},
+      {"title": "Trump's job approval rating is low by historical standards", "by": "Pew Research Center", "url": "https://www.pewresearch.org/short-reads/2026/08/06/trumps-job-approval-rating-is-low-by-historical-standards/", "why": "权威民调机构做的历史纵向比较，可直接用来验证或推翻「福特以来最高」这条说法"}
+    ]
+  },
+  "sources": [
+    {"t": "Constitution Center: How midterm elections have changed Congress since 1946", "url": "https://constitutioncenter.org/blog/how-midterm-elections-have-changed-congress-since-1946"},
+    {"t": "Washington Post: For 80 years, the president's party has almost always lost House seats in midterms", "url": "https://www.washingtonpost.com/ripple/2026/01/19/for-80-years-the-presidents-party-has-almost-always-lost-house-seats-in-midterm-elections-a-pattern-that-makes-the/"},
+    {"t": "Cook Political Report: Introducing the 2026 Cook PVI", "url": "https://www.cookpolitical.com/cook-pvi/introducing-2026-cook-pvi-re-redistricting-yields-more-republican-less-elastic-house-map"},
+    {"t": "270toWin: 2026 House Election Interactive Map", "url": "https://www.270towin.com/2026-house-election/"},
+    {"t": "Wikipedia: 2026 United States Senate elections", "url": "https://en.wikipedia.org/wiki/2026_United_States_Senate_elections"},
+    {"t": "Pew Research: Trump's job approval rating is low by historical standards", "url": "https://www.pewresearch.org/short-reads/2026/08/06/trumps-job-approval-rating-is-low-by-historical-standards/"},
+    {"t": "Forbes: Trump Approval Rating: Sinks To Low Points In 2 Latest Polls", "url": "https://www.forbes.com/sites/saradorn/2026/09/08/trumps-approval-rating-reaches-new-floors-in-2-polls-as-support-among-gop-voters-slips/"},
+    {"t": "uspollingdata.com: Trump Approval Rating 2026 Monthly Tracker", "url": "https://uspollingdata.com/polls/trump-approval/"},
+    {"t": "Wikipedia: November 1932 German federal election", "url": "https://en.wikipedia.org/wiki/November_1932_German_federal_election"},
+    {"t": "Wikipedia: March 1933 German federal election", "url": "https://en.wikipedia.org/wiki/March_1933_German_federal_election"},
+    {"t": "Zachor Foundation: Nazis Take 33.1 Percent of Vote in Reichstag Elections", "url": "https://www.zachorfoundation.org/timeline/nazis-take-331-percent-of-vote-in-reichstag-elections/"},
+    {"t": "Ballotpedia News: Senate takes up SAVE America Act", "url": "https://news.ballotpedia.org/2026/03/25/senate-takes-up-save-america-act-to-require-voter-id-proof-of-citizenship-for-federal-elections/"},
+    {"t": "National Law Review: SAVE Act Does Not Permit Use of Standard REAL ID as Proof of Citizenship", "url": "https://natlawreview.com/press-releases/save-act-does-not-permit-use-standard-real-id-proof-citizenship-voter"},
+    {"t": "WRAL Fact check: Can you use REAL ID to register to vote under GOP bill?", "url": "https://www.wral.com/story/fact-check-can-you-use-real-id-to-register-to-vote-under-gop-bill/21992858/"},
+    {"t": "MultiState: Mid-Decade Redistricting Returns as States Abandon Century-Old Norms", "url": "https://www.multistate.us/insider/2025/9/2/mid-decade-redistricting-returns-as-states-abandon-century-old-norms"},
+    {"t": "CalMatters: California voters approve Prop. 50", "url": "https://calmatters.org/politics/2025/11/proposition-50-newsom-election-day/"},
+    {"t": "NBC/KSL: Federal court declines to block Utah's court-ordered congressional map", "url": "https://www.ksl.com/article/51452527/federal-court-now-declines-to-block-utahs-new-congressional-map"},
+    {"t": "Washington Post: Lindsey Graham dies of aortic dissection, preliminary medical report says", "url": "https://www.washingtonpost.com/politics/2026/07/12/lindsey-graham-longtime-south-carolina-senator-dies-71/"},
+    {"t": "CNBC: Russia sanctions bill honoring Lindsey Graham breezes through Senate", "url": "https://www.cnbc.com/2026/08/07/russia-sanctions-bill-lindsey-graham-senate.html"},
+    {"t": "Congress.gov: S.5025 - Lindsey O. Graham Sanctioning Russia Act of 2026", "url": "https://www.congress.gov/bill/119th-congress/senate-bill/5025/text"},
+    {"t": "Wikipedia: 2026 state visit by Donald Trump to China", "url": "https://en.wikipedia.org/wiki/2026_state_visit_by_Donald_Trump_to_China"},
+    {"t": "CNN: Trump arrives in China for summit with Xi Jinping", "url": "https://www.cnn.com/2026/05/13/politics/live-news/trump-china-visit-arrival-ceremony-hnk"},
+    {"t": "NPR: 2026 Senate races to watch", "url": "https://www.npr.org/2026/05/02/nx-s1-5806271/2026-midterm-elections-control-senate-race"},
+    {"t": "Slate: Can Democrats take control by flipping North Carolina, Ohio, Maine, and Texas?", "url": "https://slate.com/news-and-politics/2026/09/midterms-senate-control-democrats.html"},
+    {"t": "Political Wire: Democrats Lead By 8 Points on the Generic Ballot", "url": "https://politicalwire.com/2026/09/04/democrats-lead-by-8-points-on-generic-ballot/"},
+    {"t": "Brookings: What do special elections mean for the midterm elections?", "url": "https://www.brookings.edu/articles/what-do-special-elections-mean-for-the-midterm-elections/"},
+    {"t": "CAP: The Trump Administration Is Interfering in the 2026 Midterm Elections", "url": "https://www.americanprogress.org/article/the-trump-administration-is-interfering-in-the-2026-midterm-elections-to-entrench-the-imperial-presidency/"},
+    {"t": "Just Security: The Trump Administration's Strategy for Reshaping Elections", "url": "https://www.justsecurity.org/133953/the-trump-administrations-strategy-for-reshaping-elections/"},
+    {"t": "Brennan Center: Texas Messes with Democracy", "url": "https://www.brennancenter.org/our-work/analysis-opinion/texas-messes-democracy"}
+  ],
+  "note": "未能核实到的/需人工确认的点：(1) 「25次里保住两院只有4次」这个精确统计口径未找到单一权威信源直接给出，依赖AI对多篇文章交叉推算，建议人工进一步核实瓜哥原始数据来源；(2) Cook Political Report、270toWin官网多次被拦截（403），200-210席的数字来自搜索引擎摘要中转述的Cook评级数据，未能直接打开官网原始页面核对，且该榜单会随周更新，建议以直播当天(2026-08-02)前后的历史快照为准而非本次核查时(2026-09-11)的最新数据；(3) 「真实投票权法案」是否确指SAVE Act为AI初判，未见直播原文逐字确认这一对应关系；(4) SAVE Act截至2026年9月仍卡在参议院未通过成法，直播发生的2026年8月2日时点该法案状态与现在（9月）基本一致（众院已过、参院未过），未发现期间有实质性进展；(5) history.precedent中2003年得州重划的「净改变约6席」为多信源交叉估算，非官方精确统计。"
+}

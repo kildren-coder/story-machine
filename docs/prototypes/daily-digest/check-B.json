@@ -1,0 +1,221 @@
+{
+  "event": "B",
+  "overall": "warn",
+  "deviations": [
+    {
+      "ts": "01:22:03",
+      "claim": "桑德斯2016年自称民主社会主义者,初选惜败后成立Our Revolution",
+      "verdict": "warn",
+      "basis": "Our Revolution于2016年8月24日成立,确系桑德斯输掉党内初选后创立,这部分准确。但'2016年自称民主社会主义者'这个说法不准确——桑德斯早在1981年当选伯灵顿市长时就已公开以'社会主义者'身份参选,此后几十年持续自我标注,2016年只是这个标签第一次进入全国主流视野,不是他'首次自称'。",
+      "links": [
+        {"t": "Wikipedia: Our Revolution", "url": "https://en.wikipedia.org/wiki/Our_Revolution"},
+        {"t": "Common Dreams: Our Revolution成立报道", "url": "https://www.commondreams.org/news/2016/08/08/not-alone-together-sanders-campaign-declares-creation-our-revolution"},
+        {"t": "Jacobin: How Bernie Sanders, an Open Socialist, Won Burlington's Mayoral Election", "url": "https://jacobin.com/2021/03/bernie-sanders-burlington-vermont-mayoral-election-open-socialist/"}
+      ]
+    },
+    {
+      "ts": "01:26:41",
+      "claim": "2026年约七八位DSA成员在选举(初选)中胜出,多在深蓝选区",
+      "verdict": "ok",
+      "basis": "多家媒体综合统计显示,2026年国会层级预计有七到九位DSA背书候选人进入国会,与'七八位'基本吻合;Brookings的统计也显示DSA候选人高度集中在深蓝区(加州90人、纽约21人参选,真正在竞争激烈选区[Cook PVI小于D+10]获胜的只有10人),印证'多在深蓝选区'。若把统计口径放宽到全部层级(州议会+地方),DSA今年实际胜选数远超七八位(Washington Examiner称超过30位),所以'七八位'更贴合国会层级的口径。",
+      "links": [
+        {"t": "Washington Examiner: DSA endorsement tracker", "url": "https://www.washingtonexaminer.com/news/4657182/dsa-endorsement-tracker-socialists-running-for-office-across-america/"},
+        {"t": "Fox News: Meet the far-left insurgents waging war on the Democratic establishment", "url": "https://www.foxnews.com/politics/meet-far-left-insurgents-waging-war-democratic-establishment-2026-midterms"},
+        {"t": "Brookings: Democratic socialist candidates show gains but limited reach in 2026", "url": "https://www.brookings.edu/articles/democratic-socialist-candidates-show-gains-but-limited-reach-in-2026/"}
+      ]
+    },
+    {
+      "ts": "01:29:41",
+      "claim": "马姆达尼背书11位候选人,10位赢了民主党初选",
+      "verdict": "none",
+      "basis": "查不到与'背书11位、10位获胜'精确对应的报道。能确认的是:马姆达尼亲自高调背书的3位国会候选人(Lander、Chevalier、Valdez)全部获胜、零失利;另有报道称DSA(非马姆达尼本人)在纽约州议会层级拿下7席,加上国会3席合计10个胜选席位,但这与'11位候选人中10位获胜'的表述对不上(没有出现'输了1位'的报道)。不排除节目说的是某个我没检索到的具体统计口径,存疑,需要人工用原始信源核对。",
+      "links": []
+    },
+    {
+      "ts": "01:28:41",
+      "claim": "马姆达尼从求学到工作,没有任何一份工作持续超过一年",
+      "verdict": "ok",
+      "basis": "Yahoo/AOL的调查报道显示,马姆达尼2014年大学毕业到2020年当选纽约州众议员之间,实际全职工作时间总共约3年,期间做过MoveOn组织者(4个月)、TexPIRG倡导员(2个月)、竞选经理、短暂的社区非营利机构财务顾问,以及说唱歌手/电影音乐总监等零散工作,没有一份长期稳定工作,与说法方向一致。但检索到的信源中没有出现'Bowery Partners'这个雇主名字,这个具体细节无法证实也无法证伪。",
+      "links": [
+        {"t": "Yahoo News: Zohran Mamdani has barely ever had a job", "url": "https://www.yahoo.com/news/zohran-mamdani-barely-ever-had-201532529.html"},
+        {"t": "AOL(转载同一报道)", "url": "https://www.aol.com/zohran-mamdani-barely-ever-had-201532054.html"}
+      ]
+    },
+    {
+      "ts": "01:40:18",
+      "claim": "马姆达尼背书的两到三位国会候选人全部胜选,包括纽约第10选区Lander、第7选区、第13选区,击败的都是资深现任",
+      "verdict": "warn",
+      "basis": "3位候选人全部胜选属实:第10区Brad Lander以65.8%大比分击败两届现任Dan Goldman;第13区Darializa Avila Chevalier击败五届现任Adriano Espaillat。但第7区不成立'击败资深现任'——该区是现任Nydia Velázquez主动宣布不再连任后空出的开放议席,Claire Valdez是在开放议席中获胜,没有现任对手可言。所以'都是资深现任'这个概括对两个区成立、对第7区不成立。",
+      "links": [
+        {"t": "CNBC: Three New York Democrats backed by Mamdani win House seat primaries", "url": "https://www.cnbc.com/2026/06/24/mamdani-democrats-house-primary-lander-valdez-chevalier.html"},
+        {"t": "CBS New York: Mamdani endorsement in NY-7 tests power", "url": "https://www.cbsnews.com/newyork/news/mamdani-endorsement-ny-7-primary-retiring-rep-nydia-velazquez/"},
+        {"t": "NPR: Mayor Mamdani endorsed three House candidates. They all won", "url": "https://www.npr.org/2026/06/24/nx-s1-5869469/mayor-mamdani-endorsed-three-house-candidates-they-all-won"}
+      ]
+    },
+    {
+      "ts": "02:05:18",
+      "claim": "盖洛普显示认可川普的共和党选民52%、民主党12%,相差40点,史上最大分裂",
+      "verdict": "bad",
+      "basis": "查到的最新盖洛普数据(2025年底/2026年初)是:川普总体支持率36%,共和党内支持率89%、独立选民25%、民主党内3%,党派差距达92个百分点,这个92点差距才是盖洛普有记录以来最大的党派分裂。节目说的'共和党52%、民主党12%、相差40点'与实际数字对不上——共和党实际支持率(89%)远高于52%,'史上最大分裂'这个定性是对的,但具体数字记错了,很可能是把别的调查或别的问题的数字记混了。",
+      "links": [
+        {"t": "Gallup: Trump's Approval Rating Drops to 36%, New Second-Term Low", "url": "https://news.gallup.com/poll/699221/trump-approval-rating-drops-new-second-term-low.aspx"},
+        {"t": "Gallup: Americans End Year in Gloomy Mood", "url": "https://news.gallup.com/poll/700241/americans-end-year-gloomy-mood.aspx"}
+      ]
+    },
+    {
+      "ts": "01:33:57",
+      "claim": "印度穆斯林人口全球第四,仅次于印尼、巴基斯坦、孟加拉",
+      "verdict": "bad",
+      "basis": "Pew Research 2025年发布的最新数据(基于2020年统计)显示排序是:印尼(2.39亿)>巴基斯坦(2.27亿)>印度(2.13亿)>孟加拉(1.51亿)。印度实际是全球穆斯林人口第三多的国家,不是第四;第四名是孟加拉,不是印度。节目把印度和孟加拉的名次说反了。Pew同时预测到2050年印度将超过印尼成为穆斯林人口第一大国,但那是未来预测,不是现状。",
+      "links": [
+        {"t": "Pew Research: Countries with the most Muslims & global Muslim population change, 2010-2020", "url": "https://www.pewresearch.org/religion/2025/06/09/muslim-population-change/"}
+      ]
+    },
+    {
+      "ts": "02:03:19",
+      "claim": "马姆达尼按《可兰经》宣誓就职",
+      "verdict": "ok",
+      "basis": "多家媒体证实:2026年1月1日凌晨,马姆达尼在一座已关闭的地铁站举行的私人宣誓仪式上,用祖父传下的《可兰经》和纽约公共图书馆出借的一本200年历史的《可兰经》宣誓,是纽约市历史上第一位用《可兰经》宣誓的市长;当天下午在市政厅又举行了公开仪式,由桑德斯主持。",
+      "links": [
+        {"t": "Al Jazeera: Zohran Mamdani takes oath as New York mayor with historic Quran", "url": "https://www.aljazeera.com/news/2026/1/1/zohran-mamdani-sworn-in-as-new-york-mayor-with-historic-quran"},
+        {"t": "PBS NewsHour: sworn in on a Quran full of symbolism", "url": "https://www.pbs.org/newshour/politics/zohran-mamdani-officially-sworn-in-as-new-york-citys-mayor-on-a-quran-full-of-symbolism"},
+        {"t": "US News: officially sworn in on a Quran full of symbolism", "url": "https://www.usnews.com/news/best-states/new-york/articles/2026-01-01/zohran-mamdani-officially-sworn-in-on-a-quran-full-of-symbolism"}
+      ]
+    },
+    {
+      "ts": "01:31:19",
+      "claim": "有人提议把美国军费砍半到7000亿美元",
+      "verdict": "ok",
+      "basis": "参议员Ed Markey提出的'Slash the Pentagon Act'确实提议把五角大楼预算上限设在约7500亿美元,大约是川普政府2027财年1.5万亿美元军费(总军事相关支出)申请的一半,方向和数量级都对得上'砍半到7000亿'的说法,具体数字略有出入(7500亿 vs 7000亿)。",
+      "links": [
+        {"t": "Common Dreams: 'Slash the Pentagon Act' Would Cap Trump's Military Budget", "url": "https://www.commondreams.org/news/slash-the-pentagon-act"},
+        {"t": "Markey参议员官网新闻稿(削减五角大楼预算10%的另一项提案)", "url": "https://www.markey.senate.gov/news/press-releases/markey-sanders-initiative-to-cut-pentagon-budget-by-10-secures-support-of-half-of-us-senate-democratic-caucus"}
+      ]
+    },
+    {
+      "ts": "01:59:27",
+      "claim": "塔克·卡尔森因伊朗议题与川普决裂",
+      "verdict": "ok",
+      "basis": "2026年2月美国、以色列联合空袭伊朗后,卡尔森公开与川普决裂,指责其被以色列'绑架'外交政策,自称'后悔的支持者';2026年4月他在自己的播客上为误导支持者投票给川普公开道歉。多家媒体(CNN、彭博社)对此有专门报道和维基词条'Trump-Carlson feud'记录全过程。",
+      "links": [
+        {"t": "CNN: What Tucker Carlson's big break with Trump means", "url": "https://www.cnn.com/2026/04/07/politics/tucker-carlson-trump-iran"},
+        {"t": "Wikipedia: Trump-Carlson feud", "url": "https://en.wikipedia.org/wiki/Trump-Carlson_feud"},
+        {"t": "Bloomberg: Tucker Carlson on Trump, Iran and the Future of the Republican Party", "url": "https://www.bloomberg.com/features/2026-tucker-carlson-weekend-interview/"}
+      ]
+    },
+    {
+      "ts": "02:01:01",
+      "claim": "托马斯·马希公开说川普背叛MAGA,初选落败",
+      "verdict": "ok",
+      "basis": "肯塔基州第4选区初选中,马希于2026年5月19-20日败给川普背书的前海豹突击队员Ed Gallrein,这场初选是史上最贵的众院初选,确认属实。马希没有被找到逐字使用'背叛'这个词,但他公开表达的意思高度吻合:他说'我的党9%的时间在为恋童癖辩护、把国家拖入破产或挑起新战争,这种时候我不跟党走',并批评国会'逢迎强权、随风倒'是'暴民统治',核心是川普在爱泼斯坦文件问题上对选民'食言',这构成了实质意义上的'背叛MAGA承诺'的指控,只是没有查到'背叛'这个字面原词。",
+      "links": [
+        {"t": "CNBC: Trump-backed Gallrein defeats Massie", "url": "https://www.cnbc.com/2026/05/20/kentucky-primary-trump-massie-gallrein.html"},
+        {"t": "PBS NewsHour: Trump-backed Gallrein defeats Rep. Thomas Massie in GOP primary", "url": "https://www.pbs.org/newshour/politics/trump-backed-gallrein-defeats-rep-thomas-massie-in-gop-primary"},
+        {"t": "Yahoo News: 'My party is taking up for pedophiles' - Massie explains split with MAGA, Trump", "url": "https://www.yahoo.com/news/articles/party-taking-pedophiles-massie-explains-180232343.html"}
+      ]
+    },
+    {
+      "ts": "01:53:15",
+      "claim": "福克斯新闻这两天批评DSA成员访问中国大陆、用了kowtow这类词",
+      "verdict": "warn",
+      "basis": "大方向属实:福克斯新闻在2026年7月末到8月对DSA成员访华、接受中共VIP款待后联署'支持和捍卫中国社会主义'一事做了密集、批评性的报道,福克斯言论版文章将DSA成员称为列宁所说的'有用的白痴'(useful idiots)。但检索到的具体文章和视频标题里没有找到'kowtow'这个词,无法确认节目里说的这个具体措辞,可能出现在未被检索到的某段视频或另一篇文章里。",
+      "links": [
+        {"t": "Fox News(言论): DSA members back Chinese Communist Party after CCP-sponsored VIP trips", "url": "https://www.foxnews.com/opinion/democratic-socialists-america-need-actually-meet-china-they-claim-love"},
+        {"t": "Fox News视频: Report - DSA members treated like 'royalty' during China trip", "url": "https://www.foxnews.com/video/6402557738112"}
+      ]
+    },
+    {
+      "ts": "01:47:30",
+      "claim": "桑德斯84岁",
+      "verdict": "ok",
+      "basis": "桑德斯生于1941年9月8日。直播录制于2026年8月2日,当时他尚未过9月8日生日,实际年龄是84岁(2026年9月8日满85岁),说法准确。",
+      "links": [
+        {"t": "Britannica: Bernie Sanders", "url": "https://www.britannica.com/biography/Bernie-Sanders"},
+        {"t": "factually.co: How old is Bernie Sanders", "url": "https://factually.co/fact-checks/politics/how-old-is-bernie-sanders-ca4dc4"}
+      ]
+    }
+  ],
+  "support": [
+    {
+      "text": "历史先例已经发生过一次:密尔沃基'下水道社会主义者'的政纲最终被主流民主党吸收,社会主义标签因此失去独立存在的必要,1960年后再没有社会主义市长——这正是'被主流意识形态吸收'的现成范本。",
+      "links": [{"t": "Bloomberg: Who Were Milwaukee's 'Sewer Socialist' Mayors?", "url": "https://www.bloomberg.com/news/articles/2019-03-13/who-were-milwaukee-s-sewer-socialist-mayors"}]
+    },
+    {
+      "text": "DSA还没真正拿到全国性权力,内部已经因AOC是否适合代表2028年总统选举而爆发'路线内战':国家层面的'解放核心小组'(Liberation Caucus)公开指控AOC'一贯投机'、背离社会主义路线,纽约市分部甚至放话考虑脱离全国组织——印证'内斗先于夺权'的担忧。",
+      "links": [{"t": "Axios: Inside the socialists' civil war over AOC and 2028", "url": "https://www.axios.com/2026/08/30/socialists-fight-aoc-2028"}]
+    },
+    {
+      "text": "Brookings的系统统计显示,2026年282位DSA背书候选人里,州级和国会级候选人的初选胜率低于地方级和州议会级候选人,且候选人高度集中在深蓝的加州(90人)和纽约(21人),在竞争选区(Cook PVI小于D+10)只有10人获胜——说明这波浪潮目前主要靠'自己人的地盘'撑着,还没有证明能突破安全区。",
+      "links": [{"t": "Brookings: Democratic socialist candidates show gains but limited reach in 2026", "url": "https://www.brookings.edu/articles/democratic-socialist-candidates-show-gains-but-limited-reach-in-2026/"}]
+    },
+    {
+      "text": "托派刊物World Socialist Web Site直接提出'安全阀'论:认为马姆达尼和DSA在体制内运作,实际功能是把民众不满重新导回民主党内部、维系资本主义国家机器的合法性,而不是真正挑战它。",
+      "links": [{"t": "WSWS: The New York elections and the political role of the Democratic Socialists of America", "url": "https://www.wsws.org/en/articles/2026/07/01/jswe-j01.html"}]
+    }
+  ],
+  "against": [
+    {
+      "text": "DSA的组织规模已经是结构性的,不只是依附于个别明星政治人物:2026年7月4日会员数突破12万,超过1912年德布斯时代社会党的历史峰值(约11.3万),成为美国历史上规模最大的社会主义组织,且从2024年10月约5万人一路翻倍增长。",
+      "links": [{"t": "City & State New York: DSA's membership nearly doubled since start of Mamdani campaign", "url": "https://www.cityandstateny.com/politics/2026/01/dsas-membership-nearly-doubled-start-mamdani-campaign/410966/"}]
+    },
+    {
+      "text": "2026年8月CNBC/Generation Lab的民调显示,18-34岁美国人中46%对'民主社会主义'持正面或非常正面看法,这是一个跨越单一选举周期的代际基础意识形态位移,不完全依赖某个具体领袖的个人魅力,意味着这股力量的选民基础可能比历史上的个案更持久。",
+      "links": [{"t": "CNBC: New CNBC Generation Lab poll shows almost half of 18-34-year-olds see democratic socialism positively", "url": "https://www.cnbc.com/2026/08/13/cnbc-poll-shows-half-of-18-to-34-year-olds-view-socialism-positively.html"}]
+    },
+    {
+      "text": "马姆达尼背书的候选人在2026年国会初选3战3胜、两次直接击败在任多届的现任议员(Goldman、Espaillat),证明DSA已经能在比市议会更高、更有权力含量的联邦层级正面击败建制派,而不只是在地方性、象征性的职位上刷存在感。",
+      "links": [{"t": "Roll Call: Goldman, Espaillat lose New York primaries to Mamdani-backed challengers", "url": "https://rollcall.com/2026/06/23/goldman-espaillat-lose-new-york-primaries-to-mamdani-backed-challengers/"}]
+    },
+    {
+      "text": "这一波的规模远超历史上任何一次同类先例——密尔沃基50年间只出过3位市长,科尔宾只是一位领袖;而Brookings统计2026年一年内全美就有282位DSA背书候选人同时在打选战,分布式的候选人基础理论上比依赖单一领袖或单一城市的模式更抗打击。",
+      "links": [{"t": "Brookings: Democratic socialist candidates show gains but limited reach in 2026", "url": "https://www.brookings.edu/articles/democratic-socialist-candidates-show-gains-but-limited-reach-in-2026/"}]
+    }
+  ],
+  "history": {
+    "precedent": "最贴切的先例是1910-1960年密尔沃基的'下水道社会主义者'市长(Seidel、Hoan、Zeidler三人,合计在任近40年)。他们不搞革命夺权,而是在两党制框架内以社会党身份直接参选市长,靠公共卫生、下水道、公园、公共住房等务实市政建设赢得连任,一度是美国唯一长期由社会主义者执政的大城市。一战期间创党元老Berger因反战立场被联邦以煽动罪起诉,二战后又经历麦卡锡主义高压,但组织本身撑到了1960年。最终收场不是被镇压击垮,而是被主流民主党'招安':民主党逐渐把社会党的市政纲领整体接管过去,'社会主义'标签因此失去独立存在的政治必要性,Zeidler之后密尔沃基再没有社会主义市长,这一路线彻底并入了民主党。",
+    "thenNow": [
+      ["组织形式", "独立的社会党(Socialist Party)身份直接参选市长", "在民主党内部通过初选夺权,以DSA背书身份参加民主党初选"],
+      ["执政层级", "市政府一级,聚焦下水道、公园、住房等硬基础设施", "从纽约市长起步,已扩展到国会众议院(3席全胜)"],
+      ["存续时间", "近40年连续或接近连续执政,跨越一战、大萧条、二战、麦卡锡主义", "不到2年(2025年底马姆达尼当选至今),尚未经历一次真正的经济衰退或外部危机考验"],
+      ["外部压力", "创党人因反战被联邦以煽动罪起诉;二战后遭遇麦卡锡主义系统性打压", "建制媒体(福克斯等)持续攻击'通共''不接地气';党内建制派(如众议院领袖杰弗里斯)公开与其保持距离"],
+      ["收场/现状", "政纲被主流民主党整体吸收,标签失去独立存在必要,1960年后无社会主义市长", "结局未知,但已现类似苗头:夺取全国性权力之前,内部已围绕AOC是否'背叛'路线爆发公开分裂"]
+    ],
+    "readings": [
+      {"title": "Zohran Mamdani and the Contradiction of Democratic Socialism", "by": "Jacobin", "url": "https://jacobin.com/2026/04/mamdani-dsa-democratic-socialism-capitalism", "why": "DSA阵营自己刊物内部最尖锐的自我拷问:一边宣称要推翻资本主义生产方式,一边又在运营资本主义国家机器,这个矛盾能走多远"},
+      {"title": "Democratic socialist candidates show gains but limited reach in 2026", "by": "Brookings", "url": "https://www.brookings.edu/articles/democratic-socialist-candidates-show-gains-but-limited-reach-in-2026/", "why": "少见的把'DSA崛起'量化到候选人数、选区竞争度、地域分布的严肃智库分析,是判断这股力量能走多远的实证底座"},
+      {"title": "The New York elections and the political role of the Democratic Socialists of America", "by": "World Socialist Web Site", "url": "https://www.wsws.org/en/articles/2026/07/01/jswe-j01.html", "why": "左翼内部最不留情面的批判视角,系统论证DSA客观上在为民主党、进而为资本主义国家机器充当'安全阀',是'被建制吸收'论的理论源头之一"},
+      {"title": "Inside the socialists' civil war over AOC and 2028", "by": "Axios", "url": "https://www.axios.com/2026/08/30/socialists-fight-aoc-2028", "why": "第一手记录DSA在夺取全国性权力之前就已经爆发的路线内战,是'改良力量被内斗耗尽'这一历史规律正在重演的即时证据"}
+    ]
+  },
+  "sources": [
+    {"t": "Wikipedia: Our Revolution", "url": "https://en.wikipedia.org/wiki/Our_Revolution"},
+    {"t": "Common Dreams: Our Revolution成立报道", "url": "https://www.commondreams.org/news/2016/08/08/not-alone-together-sanders-campaign-declares-creation-our-revolution"},
+    {"t": "Jacobin: Bernie Sanders Burlington市长选举", "url": "https://jacobin.com/2021/03/bernie-sanders-burlington-vermont-mayoral-election-open-socialist/"},
+    {"t": "Washington Examiner: DSA endorsement tracker", "url": "https://www.washingtonexaminer.com/news/4657182/dsa-endorsement-tracker-socialists-running-for-office-across-america/"},
+    {"t": "Fox News: far-left insurgents 2026 midterms", "url": "https://www.foxnews.com/politics/meet-far-left-insurgents-waging-war-democratic-establishment-2026-midterms"},
+    {"t": "Brookings: Democratic socialist candidates show gains but limited reach in 2026", "url": "https://www.brookings.edu/articles/democratic-socialist-candidates-show-gains-but-limited-reach-in-2026/"},
+    {"t": "Yahoo News: Zohran Mamdani has barely ever had a job", "url": "https://www.yahoo.com/news/zohran-mamdani-barely-ever-had-201532529.html"},
+    {"t": "CNBC: Three New York Democrats backed by Mamdani win House seat primaries", "url": "https://www.cnbc.com/2026/06/24/mamdani-democrats-house-primary-lander-valdez-chevalier.html"},
+    {"t": "CBS New York: NY-7 primary tests power of Mamdani's endorsement", "url": "https://www.cbsnews.com/newyork/news/mamdani-endorsement-ny-7-primary-retiring-rep-nydia-velazquez/"},
+    {"t": "NPR: Mayor Mamdani endorsed three House candidates. They all won", "url": "https://www.npr.org/2026/06/24/nx-s1-5869469/mayor-mamdani-endorsed-three-house-candidates-they-all-won"},
+    {"t": "Gallup: Trump's Approval Rating Drops to 36%", "url": "https://news.gallup.com/poll/699221/trump-approval-rating-drops-new-second-term-low.aspx"},
+    {"t": "Gallup: Americans End Year in Gloomy Mood", "url": "https://news.gallup.com/poll/700241/americans-end-year-gloomy-mood.aspx"},
+    {"t": "Pew Research: Muslim population change 2010-2020", "url": "https://www.pewresearch.org/religion/2025/06/09/muslim-population-change/"},
+    {"t": "Al Jazeera: Mamdani sworn in with historic Quran", "url": "https://www.aljazeera.com/news/2026/1/1/zohran-mamdani-sworn-in-as-new-york-mayor-with-historic-quran"},
+    {"t": "Common Dreams: Slash the Pentagon Act", "url": "https://www.commondreams.org/news/slash-the-pentagon-act"},
+    {"t": "CNN: Tucker Carlson's break with Trump over Iran", "url": "https://www.cnn.com/2026/04/07/politics/tucker-carlson-trump-iran"},
+    {"t": "Wikipedia: Trump-Carlson feud", "url": "https://en.wikipedia.org/wiki/Trump-Carlson_feud"},
+    {"t": "CNBC: Trump-backed Gallrein defeats Massie", "url": "https://www.cnbc.com/2026/05/20/kentucky-primary-trump-massie-gallrein.html"},
+    {"t": "Yahoo News: Massie explains split with MAGA, Trump", "url": "https://www.yahoo.com/news/articles/party-taking-pedophiles-massie-explains-180232343.html"},
+    {"t": "Fox News(言论): DSA members back Chinese Communist Party after CCP-sponsored VIP trips", "url": "https://www.foxnews.com/opinion/democratic-socialists-america-need-actually-meet-china-they-claim-love"},
+    {"t": "Britannica: Bernie Sanders", "url": "https://www.britannica.com/biography/Bernie-Sanders"},
+    {"t": "Bloomberg: Milwaukee's 'Sewer Socialist' Mayors", "url": "https://www.bloomberg.com/news/articles/2019-03-13/who-were-milwaukee-s-sewer-socialist-mayors"},
+    {"t": "Axios: Inside the socialists' civil war over AOC and 2028", "url": "https://www.axios.com/2026/08/30/socialists-fight-aoc-2028"},
+    {"t": "City & State New York: DSA's membership nearly doubled", "url": "https://www.cityandstateny.com/politics/2026/01/dsas-membership-nearly-doubled-start-mamdani-campaign/410966/"},
+    {"t": "CNBC: Generation Lab poll on young Americans and democratic socialism", "url": "https://www.cnbc.com/2026/08/13/cnbc-poll-shows-half-of-18-to-34-year-olds-view-socialism-positively.html"},
+    {"t": "Roll Call: Goldman, Espaillat lose primaries to Mamdani-backed challengers", "url": "https://rollcall.com/2026/06/23/goldman-espaillat-lose-new-york-primaries-to-mamdani-backed-challengers/"},
+    {"t": "Jacobin: Zohran Mamdani and the Contradiction of Democratic Socialism", "url": "https://jacobin.com/2026/04/mamdani-dsa-democratic-socialism-capitalism"},
+    {"t": "WSWS: The New York elections and the political role of the DSA", "url": "https://www.wsws.org/en/articles/2026/07/01/jswe-j01.html"}
+  ],
+  "note": "核查边界:1) 条目3'马姆达尼背书11位、10位获胜'的精确统计口径没查到对应信源,只能确认3位国会候选人全胜、州议会另有约7席获胜,判为none,建议人工用原始视频比对具体数字;2) 条目4中'Bowery Partners'这个具体雇主名字未能证实或证伪,只是整体'工作不稳定'的方向核实为真;3) 条目11、12里,'背叛'和'kowtow'这两个具体措辞都没有在检索到的文本信源里逐字出现,只能确认事件本身和情绪方向属实,措辞本身可能来自我没搜到的视频片段,建议人工确认;4) 条目6(盖洛普)和条目7(印度穆斯林人口排名)是本次核查中最明确的两处硬伤,数字/排序与最新权威数据直接矛盾,建议在断言表里明确标注纠正;5) 四个开放性问题(支持/反对/先例/精评)属于AI基于检索到的公开报道做出的综合判断和取材偏好,不是唯一正确答案,人可以按自己的框架替换或补充。"
+}
