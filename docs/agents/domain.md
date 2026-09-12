@@ -4,43 +4,43 @@
 
 ## Reading Rules
 
-1. **CONTEXT.md** is the authoritative source for project scope, constraints, and design principles
+1. **CONTEXT.md** is the short entry point: what the project is, the reading surfaces, the layered pipeline, the red lines
    - Read first to understand the problem space
-   - Constraints section locks in non-negotiables (e.g., manual review gate, no hallucination in ASR)
-   - Refer to specific sections when designing or reviewing implementations
+   - The red-lines section locks in non-negotiables (ASR only transcribes, checks must carry links, the reader never sees intermediate products)
 
 2. **docs/adr/** records architecture decisions (ADRs)
-   - One file per significant decision (e.g., why Gemini Flash for draft extraction, hotwords mechanism)
-   - Includes context, decision, and consequences
-   - When a design choice seems unclear, check the corresponding ADR
+   - 0001 timestamp-seek plugin, 0002 queue note as state machine, 0003 daily digest replaces the claim table, 0004 layered headless pipeline
+   - Reversals live here: when a red line or product shape was overturned, the ADR keeps the reasoning after the spec was rewritten
 
 3. **SPEC.md** is the authoritative requirements document
    - CONTEXT.md is the short entry point; SPEC.md is the full spec. **On conflict, SPEC.md wins.**
-   - Covers stage-by-stage walkthroughs, the claim data model (§5), red lines (§8), and dev priorities (§10)
-   - Replaced `audio-obsidian-pipeline-spec.md` on 2026-07-27; the old file is in git history only
+   - Covers the layers L1–L7 (§4), data contracts (§5), vault layout (§6), model/effort table (§7), red lines (§8), dev priorities (§10)
+   - v3 (2026-09-12) replaced v2 (2026-07-27, claim-table design); v2 is retrievable by file name from the backup commit named in SPEC §12
 
 ## When Consuming
 
-- **Writing code?** Reference SPEC.md §8 (red lines) + the relevant ADR
-- **Clarifying scope?** Read SPEC.md §1 (purpose & boundaries) and §10 (dev priorities)
+- **Writing code?** Reference SPEC.md §4.1 (per-layer conventions), §8 (red lines) + the relevant ADR
+- **Clarifying scope?** Read SPEC.md §1 (purpose, reading budget, what we don't do) and §10 (dev priorities)
 - **Stuck on architecture?** Check docs/adr/ for related decisions and rationale
-- **Working on the claim schema?** See SPEC.md §5 — field table, `type` semantics, why cause/effect is free text
-- **Building Obsidian structure or queries?** See SPEC.md §6
+- **Working on a layer's prompt or schema?** See SPEC.md §4 (that layer) and §5 (its data contract); keep EP02 as the golden sample
+- **Building Obsidian structure?** See SPEC.md §6
 
 ## Structure Summary
 
 ```
 ├── CONTEXT.md                          ← Start here: overview + red lines
-├── SPEC.md                             ← Authoritative spec: stages, data model, cost strategy
+├── SPEC.md                             ← Authoritative spec: layers, contracts, vault, red lines
 ├── docs/
 │   ├── adr/
 │   │   ├── README.md                   ← ADR template & index
-│   │   ├── 0001-gemini-flash-for-extraction.md
-│   │   ├── 0002-hotwords-mechanism.md
-│   │   └── ...
-│   └── agents/
-│       ├── domain.md                   ← This file
-│       ├── issue-tracker.md            ← GitHub issue workflow
-│       └── triage-labels.md            ← Label meanings
-└── CLAUDE.md                           ← Agent skills config
+│   │   ├── 0001-时间戳跳播自研插件.md
+│   │   ├── 0002-队列笔记即状态机.md
+│   │   ├── 0003-日报取代断言表.md
+│   │   └── 0004-分层无头流水线.md
+│   ├── agents/
+│   │   ├── domain.md                   ← This file
+│   │   ├── issue-tracker.md            ← GitHub issue workflow
+│   │   └── triage-labels.md            ← Label meanings
+│   └── prototypes/                     ← Answered questions, kept as primary sources
+└── CLAUDE.md                           ← Agent skills config + project summary
 ```
