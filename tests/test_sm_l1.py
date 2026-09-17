@@ -98,3 +98,14 @@ def test_prompt_version_and_schema_in_body():
         assert key in text, key
     assert read_prompt(PROMPT)["version"] == "L1-skeleton@0.1"
     assert len(read_prompt(PROMPT)["sha8"]) == 8
+
+
+def test_title_that_would_break_the_marker_block():
+    """标题 / gist 原样进标记块，所以换行与 HTML 注释在检查时就得拦下。"""
+    obj = topics([["00:00:00", "00:10:00"]])
+    obj["topics"][0]["title"] = "两行\n标题"
+    assert "撑破标记块" in errs(obj)
+
+    obj = topics([["00:00:00", "00:10:00"]])
+    obj["topics"][0]["gist"] = "收尾 <!-- /digest -->"
+    assert "撑破标记块" in errs(obj)

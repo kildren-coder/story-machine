@@ -219,7 +219,7 @@ python scripts\digest.py ep EP02 --vault "D:\obsidian-task\任务栏\story-machi
 
 | 现象 | 说明 | 怎么办 |
 |---|---|---|
-| 退出码 1、`整理: failed`、`_failed\EP02\L1-all.failed.json` 出现 | L1 两次都没过代码检查，错误行在那个文件的 `errors` 里（空洞带两头时间戳、缺字段带话题 id） | 空洞 / 重叠 / 粒度问题 → 改 `prompts\L1-skeleton.md` 升 `version:`，`-Extract EP02 -Redo`。字段缺失反复出现 → 把 §5.3 的例子在 prompt 第三节写得更死 |
+| 退出码 1、`整理: failed`、`_failed\EP02\L1-all.failed.json` 出现 | L1 两次都没过代码检查，错误行在那个文件的 `errors` 里（空洞带两头时间戳、缺字段带话题 id）。上一次成功渲染的块留着不动——块首行的生成时间就是上一次那次 | 空洞 / 重叠 / 粒度问题 → 改 `prompts\L1-skeleton.md` 升 `version:`，`-Extract EP02 -Redo`。字段缺失反复出现 → 把 §5.3 的例子在 prompt 第三节写得更死 |
 | 退出码 2、说找不到逐字稿 / 笔记 / prompt | 阶段 0 没跑完，或笔记文件名与 frontmatter 的 `episode` 都不是 `EP02` | 先补阶段 0；笔记按「文件名以 `EP02 ` 开头」或 frontmatter `episode: EP02` 找 |
 | 抛 Python 栈、提到 `claude` | 环境问题（CLI 不在 PATH、退出码非 0、信封不是 JSON、`is_error`）。这时笔记已经打成 `整理: failed` 了 | 修环境重跑；`_pairs\` 里那次的 `.raw.json` 可以直接看模型到底回了什么 |
 | 话题只有 3–4 个、每个 40 分钟 | 粒度崩了，不是代码问题 | 改 prompt 升版本重跑；别改代码里的检查 |

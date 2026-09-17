@@ -78,8 +78,15 @@ def check_topics(obj, dur: int, ep: str | None = None) -> list[str]:
         if "kind" in t and t.get("kind") not in KINDS:
             errs.append(f"{tag}: `kind` = {t.get('kind')!r} 不在 {KINDS}")
         for k in ("title", "gist"):
-            if k in t and not (isinstance(t.get(k), str) and t.get(k).strip()):
+            v = t.get(k)
+            if k not in t:
+                continue
+            if not (isinstance(v, str) and v.strip()):
                 errs.append(f"{tag}: `{k}` 不是非空字符串")
+            # 这两个字段原样落进 EP 笔记的标记块（渲染不许改字，红线 2），所以
+            # 换行和 HTML 注释只能在这里拦：它们会把块结构撑破
+            elif "\n" in v or "\r" in v or "<!--" in v:
+                errs.append(f"{tag}: `{k}` 里有换行或 HTML 注释，渲染进笔记会撑破标记块")
         who = t.get("who")
         if "who" in t and (not isinstance(who, list)
                            or not all(isinstance(w, str) and w.strip() for w in who)):
