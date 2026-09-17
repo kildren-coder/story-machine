@@ -2,7 +2,7 @@
 """L1 骨架：整集 → 话题表（SPEC §4 L1、§5.3）。
 
 一集一次调用，输入是整集的 §5.2 文本。代码这一侧只做机械检查：字段与类型、
-`id` 形状、起点读得出且不往回走——**不改模型写的任何一个字**（红线 2 在
+`id` 形状、起点读得出且落在集内——**不改模型写的任何一个字**（红线 2 在
 代码里的形态）。不过就重试，再不过进 `_failed/`。
 
 **模型只写起点，终点由代码接**（`with_ends`）。从前要它写 `[起, 止]` 并铺满
@@ -49,7 +49,12 @@ def read_start(value) -> int | None:
 
 
 def with_ends(topics: list[dict], dur: int) -> list[dict]:
-    """归一起点、接上终点。检查过了才调。
+    """按起点排好、归一起点、接上终点。检查过了才调。
+
+    先按起点**稳定**排序：模型偶尔把回头再谈的话题按主题挪到前一次旁边（EP01
+    上 20 轮出现 1 次，4 个话题错位），时间戳本身全对——628 个起点里 608 个正好
+    是行首、其余都落在相邻两行之间，没有一个离谱的手误。顺序是代码能归一的，
+    打回只会白烧一趟。起点相同的保持模型给的先后。
 
     `end` 取下一个话题的 `start`，最后一个收在时长——推出来的链天然首尾相接，
     倒置、空洞、重叠在结构上不可能发生，不必再靠闸门事后抓。两个话题起点相同
@@ -58,13 +63,21 @@ def with_ends(topics: list[dict], dur: int) -> list[dict]:
     起点统一写成 `HH:MM:SS`（模型可能写成 `MM:SS`）；第一个一律归零——整集从头
     算起，开头那几十秒并进第一个话题就是了，不为一个边界把整集打回重跑。
     """
-    secs = [read_start(t.get("start")) or 0 for t in topics]
+    ordered = sorted(topics, key=lambda t: read_start(t.get("start")) or 0)
+    secs = [read_start(t.get("start")) or 0 for t in ordered]
     secs[0] = 0
     out = []
-    for i, t in enumerate(topics):
-        end = secs[i + 1] if i + 1 < len(topics) else dur
+    for i, t in enumerate(ordered):
+        end = secs[i + 1] if i + 1 < len(ordered) else dur
         out.append({**t, "start": hms(secs[i]), "end": hms(end)})
     return out
+
+
+def out_of_order(topics: list[dict]) -> int:
+    """模型给的顺序里，有几个话题的位置和按起点排完不一样。只用来报日志。"""
+    ids = [t.get("id") for t in topics]
+    ordered = [t.get("id") for t in sorted(topics, key=lambda t: read_start(t.get("start")) or 0)]
+    return sum(1 for a, b in zip(ids, ordered) if a != b)
 
 
 def head_block(ep: str, dur: int, names: list[str]) -> str:
@@ -91,11 +104,11 @@ def build_input(ep: str, segments: list[dict], speakers: dict) -> str:
 
 
 def check_topics(obj, dur: int) -> list[str]:
-    """§5.3 的字段与类型 + 起点能读出来、落在集内、不往回走。空列表算过。
+    """§5.3 的字段与类型 + 起点能读出来、落在集内。空列表算过。
 
-    时间这一侧只剩两条真检查：起点不超过时长、不早于上一个。空洞、重叠、
-    倒置、越界都由构造排除（`end` 由下一个起点推出），格式松紧由 `read_start`
-    兜住，第一个起点由 `with_ends` 归零，起点相同算过——都不必打回重跑。
+    时间这一侧只剩两条真检查：起点读得出、不超过时长。空洞、重叠、倒置、
+    越界都由构造排除（`end` 由下一个起点推出），格式松紧由 `read_start` 兜住，
+    顺序由 `with_ends` 排好，第一个起点归零，起点相同算过——都不必打回重跑。
     """
     errs: list[str] = []
     if not isinstance(obj, dict):
@@ -106,7 +119,6 @@ def check_topics(obj, dur: int) -> list[str]:
         return errs
 
     seen: set[str] = set()
-    prev: int | None = None
     for n, t in enumerate(topics, 1):
         tag = (t or {}).get("id") if isinstance(t, dict) else None
         tag = tag if isinstance(tag, str) and tag else f"第{n}个话题"
@@ -152,15 +164,8 @@ def check_topics(obj, dur: int) -> list[str]:
         if cur > dur:
             errs.append(f"{tag}: `start` = {st} 超过整集时长 {hms(dur)}"
                         f"——时间戳只能来自这一集")
-            continue
-        # 相同算过：两件事挤在同一行里时模型就是会写两个一样的起点（起点制以来
-        # 8 轮里出现 3 次），那是行首每 30 秒才一个造成的，不是它写错。前一个
-        # 话题推出来长度为 0，切片由下一层的 pad 兜住。只有真往回走才打回
-        if prev is not None and cur < prev:
-            errs.append(f"{tag}: `start` = {st} 早于上一个话题的起点 {hms(prev)}"
-                        f"——话题按时间先后排，起点不能往回走")
-            continue
-        prev = cur
+        # 顺序不查：相同的算过（两件事挤在同一行里，行首每 30 秒才一个，它没有
+        # 别的时刻可写——起点制以来 8 轮里出现 3 次），乱了的由 with_ends 排好
 
     return errs
 
@@ -182,6 +187,9 @@ def run_l1(paths, runner, ep: str, segments: list[dict], speakers: dict, prompt:
 
     # `ep` 与 `end` 由代码填：模型只写它真正看得出来的东西（起点与内容），
     # 凡是代码已经知道的一律不问——问了就是白白多一处会错的地方
+    moved = out_of_order(obj["topics"])
+    if moved:
+        log(f"    L1：{moved} 个话题按起点重排了（模型按主题挪过位置，时间戳没动）")
     obj = {"ep": ep, "topics": with_ends(obj["topics"], dur)}
     obj["provenance"] = provenance(
         derived_from=[f"{ep}.transcript.json"], layer=LAYER, unit=UNIT,

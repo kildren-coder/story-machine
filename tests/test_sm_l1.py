@@ -4,17 +4,17 @@
 `check_topics` 是红线 9 的入口：它判不过的单元会被拦进 `_failed/`，所以它宁可
 啰嗦也不能放水；但它**只判形状**，一个字都不许改（红线 2）。
 
-时间这一侧只剩两条检查——起点不超过时长、不往回走。倒置、空洞、重叠、越界
+时间这一侧只剩两条检查——起点读得出、不超过时长。倒置、空洞、重叠、越界
 这几类曾经最常见的错误已经**在结构上不可能发生**：模型不再写终点，终点由
-`with_ends` 接上。格式松紧由 `read_start` 兜住，首个起点由 `with_ends` 归零，
-两个话题起点相同也算过，都不打回重跑。
+`with_ends` 接上。格式松紧由 `read_start` 兜住，顺序由 `with_ends` 排好，首个
+起点归零，两个话题起点相同也算过，都不打回重跑。
 """
 from __future__ import annotations
 
 import re
 
 from conftest import REPO
-from sm.l1 import build_input, check_topics, read_start, with_ends
+from sm.l1 import build_input, check_topics, out_of_order, read_start, with_ends
 from sm.prov import read_prompt
 
 PROMPT = REPO / "prompts" / "L1-skeleton.md"
@@ -58,8 +58,18 @@ def test_a_start_past_the_duration_is_rejected():
     assert "超过整集时长" in errs(topics("00:00:00", "00:11:00"))
 
 
-def test_starts_must_not_go_backwards():
-    assert "早于上一个话题的起点" in errs(topics("00:00:00", "00:05:00", "00:02:00"))
+def test_out_of_order_topics_are_sorted_not_rejected():
+    """EP01 上模型把 00:49:35 那个回头再谈的话题按主题挪到了 00:36:29 那个旁边，
+    中间三个话题排到了它后面。时间戳全对（628 个起点里没有一个离谱手误），
+    只是列表顺序错了——顺序是代码能归一的，打回只会白烧一趟。"""
+    obj = topics("00:00:00", "00:05:00", "00:02:00", "00:08:00")
+    assert check_topics(obj, DUR) == []
+    assert out_of_order(obj["topics"]) == 2
+    ts = with_ends(obj["topics"], DUR)
+    assert [t["id"] for t in ts] == ["t1", "t3", "t2", "t4"]
+    assert [t["end"] for t in ts] == ["00:02:00", "00:05:00", "00:08:00", "00:10:00"]
+    assert ts[1]["title"] == "话题3"                    # 只挪位置，一个字不改
+    assert out_of_order(topics("00:00:00", "00:05:00")["topics"]) == 0
 
 
 def test_two_topics_on_one_line_may_share_a_start():
