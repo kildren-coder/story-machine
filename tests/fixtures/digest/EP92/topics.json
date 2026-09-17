@@ -2,7 +2,8 @@
  "ep": "EP92",
  "topics": [
   {
-   "id": "opening",
+   "id": "followup-01",
+   "chapter": "followup",
    "title": "加更说明",
    "kind": "aside",
    "start": "00:00:00",
@@ -10,10 +11,11 @@
    "who": [
     "阿桥"
    ],
-   "gist": "下播后收到材料，加更十几分钟"
+   "gist": "下播后收到跟大桥收费有关的材料，加更十几分钟。"
   },
   {
-   "id": "bridge-followup",
+   "id": "followup-02",
+   "chapter": "followup",
    "title": "北港大桥货车费率：一张征求意见函的照片",
    "kind": "talk",
    "start": "00:01:00",
@@ -21,29 +23,31 @@
    "who": [
     "阿桥"
    ],
-   "gist": "按轴计费的征求意见版费率、货运公司的账、更正每月前十次"
+   "gist": "货运公司收到的征求意见函：货车按轴计费、公司一个月过桥接近三十万、本地企业拟给三成折扣、函比通报晚五天；更正每月前十次免费。"
   },
   {
-   "id": "outro",
-   "title": "下周预告",
-   "kind": "aside",
+   "id": "followup-03",
+   "chapter": "followup",
+   "title": "下周预告与道别",
+   "kind": "filler",
    "start": "00:13:00",
    "end": "00:14:00",
    "who": [
     "阿桥"
    ],
-   "gist": "老照片那期周四八点"
+   "gist": "下周老照片那期时间不变，道别。"
   }
  ],
  "provenance": {
   "derived_from": [
-   "EP92.transcript.json"
+   "chapters.json",
+   "frag-*.json"
   ],
-  "layer": "L1",
+  "layer": "L2",
   "unit": "all",
   "engine": "claude-sonnet-5",
-  "effort": "low",
-  "prompt_version": "L1@0.1",
+  "effort": "medium",
+  "prompt_version": "L2@0.1",
   "generated_at": "2026-03-12T23:10:00+08:00"
  }
 }

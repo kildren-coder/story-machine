@@ -1,14 +1,15 @@
 {
- "id": "outro",
- "title": "下周预告",
+ "id": "followup-03",
+ "chapter": "followup",
+ "title": "下周预告与道别",
+ "kind": "filler",
  "start": "00:13:00",
  "end": "00:14:00",
  "who": [
   "阿桥"
  ],
- "paras": [
-  "[00:13:00] 下周老照片那期时间不变，周四晚上八点。"
- ],
+ "gist": "下周老照片那期时间不变，道别。",
+ "paras": [],
  "quotes": [],
  "claims": [],
  "channels": [],
@@ -16,10 +17,10 @@
  "provenance": {
   "derived_from": [
    "EP92.transcript.json",
-   "topics.json"
+   "chapters.json"
   ],
   "layer": "L2",
-  "unit": "outro",
+  "unit": "followup",
   "engine": "claude-sonnet-5",
   "effort": "medium",
   "prompt_version": "L2@0.1",

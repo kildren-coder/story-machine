@@ -2,19 +2,21 @@
  "ep": "EP91",
  "topics": [
   {
-   "id": "opening",
+   "id": "bridge-01",
+   "chapter": "bridge",
    "title": "开场与设备测试",
-   "kind": "aside",
+   "kind": "filler",
    "start": "00:00:00",
    "end": "00:03:30",
    "who": [
     "阿桥",
     "老周"
    ],
-   "gist": "问好、换麦、预告两个话题"
+   "gist": "换了新麦克风、老周问好、预告今天聊大桥收费和夜市搬迁、报了直播间人数。"
   },
   {
-   "id": "bridge-toll",
+   "id": "bridge-02",
+   "chapter": "bridge",
    "title": "北港大桥收费方案：十五块还是十二块",
    "kind": "talk",
    "start": "00:03:30",
@@ -23,10 +25,11 @@
     "阿桥",
     "老周"
    ],
-   "gist": "通报按车型收费、听证会建议价、贷款与 2019 隧道先例"
+   "gist": "通报按车型收费，十五块是听证会建议价、听说可能压到十二块；贷款三十八亿靠过桥费还不完；2019 年滨江隧道收费没收成的先例；本地牌照每月前几次免费两人说法不一。"
   },
   {
-   "id": "night-market",
+   "id": "market-01",
+   "chapter": "market",
    "title": "河口夜市搬迁：消防倒逼下的选择",
    "kind": "talk",
    "start": "00:19:00",
@@ -35,10 +38,11 @@
     "阿桥",
     "老周"
    ],
-   "gist": "晚报报道搬滨江路、商户反对、消防隐患、老码头先例"
+   "gist": "晚报报道夜市六月底前搬到滨江路，商户多数反对；市里说老街消防隐患四十多处，其实是在停业整改和搬迁之间选；2016 年老码头市场搬迁头一年生意掉一半；摊主报的租金账。"
   },
   {
-   "id": "bridge-freight",
+   "id": "market-02",
+   "chapter": "market",
    "title": "回到大桥：货车费率与浮桥",
    "kind": "talk",
    "start": "00:36:00",
@@ -47,10 +51,11 @@
     "阿桥",
     "老周"
    ],
-   "gist": "货车按吨位还是按轴、浮桥分流的可能"
+   "gist": "接着前面的大桥收费：替代路线只有限重两吨的浮桥，货车得绕行；货车费率通报没公布；听证会记录只有流出版，不引用；意见征集三月三十一号截止。"
   },
   {
-   "id": "qa",
+   "id": "market-03",
+   "chapter": "market",
    "title": "结尾弹幕与下周预告",
    "kind": "aside",
    "start": "00:41:30",
@@ -59,18 +64,19 @@
     "阿桥",
     "老周"
    ],
-   "gist": "下周聊老照片"
+   "gist": "回了几条与今天无关的弹幕，下周聊河口老照片。"
   }
  ],
  "provenance": {
   "derived_from": [
-   "EP91.transcript.json"
+   "chapters.json",
+   "frag-*.json"
   ],
-  "layer": "L1",
+  "layer": "L2",
   "unit": "all",
   "engine": "claude-sonnet-5",
-  "effort": "low",
-  "prompt_version": "L1@0.1",
+  "effort": "medium",
+  "prompt_version": "L2@0.1",
   "generated_at": "2026-03-12T23:10:00+08:00"
  }
 }

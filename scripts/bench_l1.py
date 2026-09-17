@@ -15,10 +15,12 @@
 **`--out` 不许落在仓库里**：`.in.md` 是整集逐字稿，响应是它的转述（红线 10）。
 
 除了过/不过，还报几项 prompt 规矩的遵守度，全是机判：
-  短  非 filler 且不到 3 分钟的话题数（prompt 说要并进相邻话题）
-  长  超过 20 分钟的话题数（prompt 说八成漏切了）
-  零  起点与上一个相同、推出来长度为 0 的话题数
-  乱  模型给的顺序里，位置和按起点排完不一样的话题数（代码已排好）
+  短  不到 5 分钟的章数（prompt 说一章 10–20 分钟，短到 6、7 分钟可以）
+  长  超过 30 分钟的章数（L2 一次调用吃不下这么多）
+  零  和上一章写了同一行、推出来长度为 0 的章数
+  乱  模型给的顺序里，位置和按行号排完不一样的章数（代码已排好）
+汇总里每集的「章数」要和头里的参考章数（时长 ÷ 15 分钟）差不多，而且几轮之间
+别差太多——L2 的调用次数就是它。
 """
 from __future__ import annotations
 
@@ -31,14 +33,15 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from sm.l1 import build_input, check_topics, out_of_order, tidy, with_ends   # noqa: E402
+from sm.l1 import (build_input, chapter_budget, check_chapters, out_of_order,   # noqa: E402
+                   schema_for, tidy, with_ends)
 from sm.note import read_frontmatter, read_note, read_speakers              # noqa: E402
 from sm.pairs import call_layer                                             # noqa: E402
 from sm.paths import VaultPaths                                             # noqa: E402
 from sm.prov import read_prompt                                             # noqa: E402
-from sm.runner import ClaudeRunner, extract_json                            # noqa: E402
+from sm.runner import ClaudeRunner, parse_envelope                          # noqa: E402
 from sm.text import parse_hms                                               # noqa: E402
-from sm.transcript import duration_s, read_transcript                       # noqa: E402
+from sm.transcript import build_lines, duration_s, read_transcript          # noqa: E402
 
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace", line_buffering=True)
@@ -47,31 +50,32 @@ REPO = Path(__file__).resolve().parent.parent
 DEFAULT_OUT = Path(tempfile.gettempdir()) / "story-machine-bench"
 
 
-def quality(topics: list[dict], dur: int) -> dict:
-    ts = with_ends(topics, dur)
-    spans = [(t, parse_hms(t["end"]) - parse_hms(t["start"])) for t in ts]
-    return {"n": len(ts),
-            "short": sum(1 for t, s in spans if t.get("kind") != "filler" and 0 < s < 180),
-            "long": sum(1 for _, s in spans if s > 1200),
-            "zero": sum(1 for _, s in spans if s == 0),
-            "moved": out_of_order(topics)}
+def quality(chapters: list[dict], lines: list[dict], dur: int) -> dict:
+    cs = with_ends(chapters, lines, dur, {})
+    spans = [parse_hms(c["end"]) - parse_hms(c["start"]) for c in cs]
+    return {"n": len(cs),
+            "short": sum(1 for s in spans if 0 < s < 300),
+            "long": sum(1 for s in spans if s > 1800),
+            "zero": sum(1 for s in spans if s == 0),
+            "moved": out_of_order(chapters),
+            "mins": [round(s / 60) for s in spans]}
 
 
-def judge(result_text: str, dur: int) -> tuple[dict | None, list[str]]:
+def judge(envelope: dict, n_lines: int) -> tuple[dict | None, list[str]]:
     """和 run_l1 走同一条路：解析 → tidy → check。"""
     try:
-        obj = tidy(extract_json(result_text))
+        obj = tidy(parse_envelope(envelope))
     except ValueError as e:                       # JSONDecodeError 也是 ValueError
         return None, [f"响应不是合法 JSON：{e}"]
-    errs = check_topics(obj, dur)
+    errs = check_chapters(obj, n_lines)
     return (None, errs) if errs else (obj, [])
 
 
 def line(tag: str, r: dict) -> str:
     if not r["ok"]:
         return f"  {tag}: 不过  {r['secs']:4d}s  ${r['usd']}\n        · " + "\n        · ".join(r["errors"][:4])
-    return (f"  {tag}: 过  {r['n']:3d} 个话题  {r['secs']:4d}s  ${r['usd']}  "
-            f"短{r['short']} 长{r['long']} 零{r['zero']} 乱{r['moved']}")
+    return (f"  {tag}: 过  {r['n']:3d} 章  {r['secs']:4d}s  ${r['usd']}  "
+            f"短{r['short']} 长{r['long']} 零{r['zero']} 乱{r['moved']}  各章分钟 {r['mins']}")
 
 
 def run(args, vault: VaultPaths, root: Path) -> list[dict]:
@@ -84,21 +88,23 @@ def run(args, vault: VaultPaths, root: Path) -> list[dict]:
         text = read_note(vault.find_episode_note(ep))
         speakers = read_speakers(text, read_frontmatter(text))
         dur = duration_s(segs)
-        print(f"\n--- {ep}（{len(segs)} 段 / {dur}s）---")
+        lines = build_lines(segs)
+        print(f"\n--- {ep}（{len(lines)} 行 / {dur}s / 参考章数 {chapter_budget(dur)}）---")
         for rep in range(1, args.reps + 1):
             t0 = time.time()
             obj, env, errors = call_layer(
                 VaultPaths(root / f"{ep}-r{rep}"), ClaudeRunner(), ep, "L1", "all",
                 Path(args.prompt), build_input(ep, segs, speakers),
-                lambda o: check_topics(tidy(o), dur),
+                lambda o: check_chapters(tidy(o), len(lines)),
                 retries=0, model=args.model, effort=args.effort, timeout=args.timeout,
-                log=lambda m: None)
+                log=lambda m: None, schema=schema_for(len(lines)))
             usd = sum(m.get("costUSD", 0) for m in (env.get("modelUsage") or {}).values())
             r = {"ep": ep, "rep": rep, "model": args.model, "effort": args.effort,
                  "ok": obj is not None, "errors": errors,
-                 "secs": round(time.time() - t0), "usd": round(usd, 4)}
+                 "secs": round(time.time() - t0), "usd": round(usd, 4),
+                 "turns": env.get("num_turns")}
             if obj is not None:
-                r.update(quality(tidy(obj)["topics"], dur))
+                r.update(quality(tidy(obj)["chapters"], lines, dur))
             rows.append(r)
             # 每轮落一次盘：中途被杀也留得下已经跑完的
             (root / "rows.json").write_bytes(
@@ -112,19 +118,22 @@ def rejudge(vault: VaultPaths, root: Path) -> list[dict]:
     if (root / "rows.json").exists():
         saved = {(r["ep"], r["rep"]): r
                  for r in json.loads((root / "rows.json").read_bytes().decode("utf-8"))}
-    durs: dict[str, int] = {}
+    eps: dict[str, tuple[list[dict], int]] = {}
     rows = []
     for f in sorted(root.glob("*/_pairs/*/L1-all.raw.json")):
         ep, rep = f.parts[-4].rsplit("-r", 1)
-        if ep not in durs:
-            durs[ep] = duration_s(read_transcript(vault.transcript(ep))[0])
+        if ep not in eps:
+            segs = read_transcript(vault.transcript(ep))[0]
+            eps[ep] = (build_lines(segs), duration_s(segs))
+        lines, dur = eps[ep]
         env = json.loads(f.read_bytes().decode("utf-8"))
-        obj, errors = judge(env.get("result", ""), durs[ep])
+        obj, errors = judge(env, len(lines))
         old = saved.get((ep, int(rep)), {})
         r = {"ep": ep, "rep": int(rep), "ok": obj is not None, "errors": errors,
-             "secs": old.get("secs", 0), "usd": old.get("usd", 0.0)}
+             "secs": old.get("secs", 0), "usd": old.get("usd", 0.0),
+             "turns": env.get("num_turns")}
         if obj is not None:
-            r.update(quality(obj["topics"], durs[ep]))
+            r.update(quality(obj["chapters"], lines, dur))
         rows.append(r)
         print(line(f"{ep}-r{rep}", r))
     return rows
@@ -135,7 +144,8 @@ def summary(rows: list[dict]) -> None:
     for ep in dict.fromkeys(r["ep"] for r in rows):
         sub = [r for r in rows if r["ep"] == ep]
         good = [r for r in sub if r["ok"]]
-        print(f"  {ep}: 首发过 {len(good)}/{len(sub)}   话题数 {[r['n'] for r in good]}")
+        print(f"  {ep}: 首发过 {len(good)}/{len(sub)}   章数 {[r['n'] for r in good]}   "
+              f"轮数 {[r.get('turns') for r in sub]}")
     ok = sum(1 for r in rows if r["ok"])
     print(f"  合计首发通过率 {ok}/{len(rows)}   合计 ${round(sum(r['usd'] for r in rows), 3)}")
 

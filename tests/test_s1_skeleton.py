@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""里程碑 1 行走骨架的端到端用例：逐字稿 → L1 → 话题表 → EP 笔记大纲。
+"""里程碑 1 行走骨架的端到端用例：逐字稿 → L1 → 章节表 → EP 笔记大纲。
 
 对应 issue #51 验收 1–5、11。全部在 fixture vault 的临时副本上跑，假 runner 读
 `tests/fixtures/raw/`，一次真实调用都不发。
@@ -40,8 +40,8 @@ def test_ep91_end_to_end(vault):
 
     assert (vault / "_pairs" / "EP91" / "L1-all.in.md").exists()
     assert (vault / "_pairs" / "EP91" / "L1-all.raw.json").exists()
-    got = json.loads((vault / "_digest" / "EP91" / "topics.json").read_bytes().decode("utf-8"))
-    want = json.loads((FIX / "digest" / "EP91" / "topics.json").read_bytes().decode("utf-8"))
+    got = json.loads((vault / "_digest" / "EP91" / "chapters.json").read_bytes().decode("utf-8"))
+    want = json.loads((FIX / "digest" / "EP91" / "chapters.json").read_bytes().decode("utf-8"))
     assert drop_prov(got) == drop_prov(want)
     assert set(got["provenance"]) == set(PROV_KEYS)
 
@@ -50,13 +50,16 @@ def test_ep91_end_to_end(vault):
     assert re.search(r"<!-- /speakers -->\s*<!-- digest:auto -->", text)
     block = block_of(text)
     heads = HEAD_RE.findall(block)
-    assert len(heads) == 5
-    assert [h[0] for h in heads] == [t["start"] for t in want["topics"]]
-    assert [h[1] for h in heads] == ["开场与设备测试 · 旁白",
-                                     "北港大桥收费方案：十五块还是十二块",
-                                     "河口夜市搬迁：消防倒逼下的选择",
-                                     "回到大桥：货车费率与浮桥",
-                                     "结尾弹幕与下周预告 · 旁白"]
+    # 模型切了三章，第三章只有 6 分 40 秒：程序把它并进了前一章（标题用顿号接）
+    assert len(heads) == 2
+    assert [h[0] for h in heads] == ["00:00:00", "00:19:00"]
+    assert [h[0] for h in heads] == [c["start"] for c in want["chapters"]]
+    assert [h[1] for h in heads] == ["开场、北港大桥收费方案",
+                                     "河口夜市搬迁滨江路、回到大桥：货车与浮桥、结尾弹幕"]
+    # 行号换成了时刻、终点接上了、说话人是代码从行表里填的——模型一样都没写
+    assert [(c["id"], c["start"], c["end"]) for c in got["chapters"]] == [
+        ("bridge", "00:00:00", "00:19:00"), ("market", "00:19:00", "00:42:40")]
+    assert all(c["who"] == ["阿桥", "老周"] and "line" not in c for c in got["chapters"])
 
     fm = read_frontmatter(text)
     assert fm["整理"] == "done"
@@ -102,7 +105,7 @@ def test_rerun_keeps_the_generated_at_from_the_product(vault):
     """块首行那个时间来自产物的 provenance，不是渲染时刻。
 
     取当下的话，每跑一次 `-Extract`（哪怕 L1 跳过了）笔记都变一次：Obsidian 记
-    一条新版本、同步重传；那个时间的含义也从「这份话题表什么时候生成的」滑成
+    一条新版本、同步重传；那个时间的含义也从「这份章节表什么时候生成的」滑成
     「上次渲染于」，改了 prompt 想回头对比就没依据了。
     """
     runner = FakeRunner(RAW)
@@ -110,9 +113,9 @@ def test_rerun_keeps_the_generated_at_from_the_product(vault):
     first = note_text(vault, "EP91")
     assert f"生成于 {NOW}" in first
 
-    topics = json.loads(
-        (vault / "_digest" / "EP91" / "topics.json").read_bytes().decode("utf-8"))
-    assert topics["provenance"]["generated_at"] == NOW
+    chapters = json.loads(
+        (vault / "_digest" / "EP91" / "chapters.json").read_bytes().decode("utf-8"))
+    assert chapters["provenance"]["generated_at"] == NOW
 
     # 半天之后再跑：L1 跳过，笔记必须逐字节不变
     assert run_ep(vault, "EP91", runner, now="2026-03-13T11:30:00+08:00") == 0
@@ -121,7 +124,7 @@ def test_rerun_keeps_the_generated_at_from_the_product(vault):
 
 
 def test_bad_l1_goes_to_failed(vault):
-    """验收 4：起点超出整集 + 缺 kind → `_failed/`、整理: failed、无块、退出码 1。"""
+    """验收 4：行号不在这一集里 + 缺 title → `_failed/`、整理: failed、无块、退出码 1。"""
     runner = FakeRunner(RAW_BAD)
     assert run_ep(vault, "EP91", runner) == 1
     assert len(runner.calls) == 2                      # 默认 retries=1
@@ -129,9 +132,9 @@ def test_bad_l1_goes_to_failed(vault):
     failed = vault / "_failed" / "EP91" / "L1-all.failed.json"
     assert failed.exists()
     errs = "\n".join(json.loads(failed.read_bytes().decode("utf-8"))["errors"])
-    assert "00:45:00" in errs and "超过整集时长" in errs  # 本集只有 00:42:40
-    assert "缺字段" in errs and "kind" in errs          # qa 话题没有 kind
-    assert not (vault / "_digest" / "EP91" / "topics.json").exists()
+    assert "`line` = 99" in errs and "不在这一集的行号里（1–76）" in errs
+    assert "缺字段" in errs and "title" in errs         # 第三章没有 title
+    assert not (vault / "_digest" / "EP91" / "chapters.json").exists()
 
     text = note_text(vault, "EP91")
     assert "<!-- digest:auto -->" not in text
@@ -179,20 +182,21 @@ def test_block_appended_when_no_anchor(vault):
 
 
 def test_stdout_says_each_step_and_no_content(vault, capsys):
-    """红线 6：日志只报步骤与计数，不把话题标题 / gist 打到终端。"""
+    """红线 6：日志只报步骤与计数，不把章节标题 / gist 打到终端。"""
     assert run_ep(vault, "EP91", FakeRunner(RAW)) == 0
     out = capsys.readouterr().out
-    assert "L1 骨架" in out and "L1 通过：5 个话题" in out
+    assert "L1 骨架" in out and "L1 通过：2 章" in out
+    assert "模型切了 3 章，其中 1 章不到 8 分钟，并进了相邻的章" in out
     assert "整理: done" in out
     assert "北港大桥收费方案" not in out
-    assert "晚报报道搬滨江路" not in out
+    assert "河口晚报今早报道" not in out
     assert NOW in note_text(vault, "EP91")              # 块首行写明生成时间
 
 
-def test_broken_topics_json_stops_instead_of_overwriting(vault):
+def test_broken_chapters_json_stops_instead_of_overwriting(vault):
     """产物坏了先报出来：悄悄重跑会覆盖掉人正要看的证据。"""
     assert run_ep(vault, "EP91", FakeRunner(RAW)) == 0
-    broken = vault / "_digest" / "EP91" / "topics.json"
+    broken = vault / "_digest" / "EP91" / "chapters.json"
     broken.write_bytes("{截断了".encode("utf-8"))
     runner = FakeRunner(RAW)
     assert run_ep(vault, "EP91", runner) == 2

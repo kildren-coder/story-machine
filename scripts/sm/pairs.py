@@ -21,7 +21,7 @@ import json
 from pathlib import Path
 
 from .prov import now_iso
-from .runner import extract_json
+from .runner import parse_envelope
 
 
 MAX_RETRY_ERRORS = 10        # 错误太多时只带前几条：附一屏比附一沓管用
@@ -83,10 +83,13 @@ def _write_json(path: Path, obj) -> None:
 def call_layer(paths, runner, scope: str, layer: str, unit: str, prompt_file: Path,
                input_text: str, check, *, retries: int = 1, model: str = "sonnet",
                effort: str = "low", timeout: int = 1800, log=print,
-               generated_at: str | None = None) -> tuple[dict | None, dict, list[str]]:
-    """`.in.md` → runner → `.raw.json` → extract_json → check。
+               generated_at: str | None = None,
+               schema: dict | None = None) -> tuple[dict | None, dict, list[str]]:
+    """`.in.md` → runner → `.raw.json` → parse_envelope → check。
 
     `check(obj) -> [错误…]`；空列表算过。返回 (产物 | None, 最后一个信封, 错误)。
+    `schema` 给了就交给 CLI 把形状关（`--json-schema`）；`check` 只剩 schema 表达
+    不了的那些（行号在不在范围内之类）。
     runner 自己抛的异常（CLI 不在、退出码非 0、信封不是 JSON、is_error）**不吞**
     ——那是环境坏了，不是模型答错，重试没有意义。
     """
@@ -107,11 +110,11 @@ def call_layer(paths, runner, scope: str, layer: str, unit: str, prompt_file: Pa
             in_path.write_bytes(text.encode("utf-8"))
         log(f"    {layer}-{unit} 第 {attempt} 次调用（{model} / effort {effort}）…")
         envelope = runner.run(scope, layer, unit, prompt_file, text,
-                              model, effort, timeout)
+                              model, effort, timeout, schema=schema)
         if not archived:
             _write_json(raw_path, envelope)
         try:
-            obj = extract_json(envelope.get("result", ""))
+            obj = parse_envelope(envelope)
             errors = list(check(obj))
         except (ValueError, json.JSONDecodeError) as e:
             obj, errors = None, [f"响应不是合法 JSON：{e}"]

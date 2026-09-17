@@ -13,7 +13,7 @@ from conftest import RAW, RAW_BAD
 from sm.pairs import MAX_PREV_CHARS, call_layer, retry_input
 from sm.paths import VaultPaths
 from sm.prov import PROV_KEYS, engine_of, provenance
-from sm.runner import FakeRunner, ReplayRunner, extract_json
+from sm.runner import SCHEMA_EXHAUSTED, FakeRunner, ReplayRunner, extract_json, parse_envelope
 
 SPEC_9_KEYS = {"derived_from", "layer", "unit", "engine", "effort",
                "prompt_version", "generated_at"}
@@ -45,7 +45,7 @@ def test_passing_check_returns_object(tmp_path):
     runner = FakeRunner(RAW)
     obj, _, errors = call_layer(paths, runner, "EP91", "L1", "all", "p.md", "x",
                                 lambda o: [], log=lambda m: None)
-    assert errors == [] and obj["topics"][0]["id"] == "opening"
+    assert errors == [] and obj["chapters"][0]["id"] == "bridge"
     assert len(runner.calls) == 1
     assert not (paths.failed("EP91") / "L1-all.failed.json").exists()
 
@@ -69,17 +69,18 @@ def test_replay_runner_reads_pairs_and_keeps_the_archive(tmp_path):
 
     obj, _, errors = call_layer(paths, ReplayRunner(tmp_path / "_pairs"), "EP91", "L1",
                                "all", "p.md", "别写进去", lambda o: [], log=lambda m: None)
-    assert errors == [] and obj["topics"][0]["id"] == "opening"
+    assert errors == [] and obj["chapters"][0]["id"] == "bridge"
     assert (pairs / "L1-all.raw.json").read_bytes() == before
     assert not (pairs / "L1-all.in.md").exists()
 
 
 def test_extract_json_shapes():
     """验收 8 后半：围栏、带前言都能取；纯散文抛 ValueError。"""
-    fenced = json.loads((RAW / "EP91" / "L1-all.raw.json").read_bytes().decode("utf-8"))
-    assert extract_json(fenced["result"])["topics"][0]["id"] == "opening"
+    fenced = json.loads((RAW_BAD / "EP91" / "L1-all.raw.json").read_bytes().decode("utf-8"))
+    assert fenced["result"].startswith("```json")
+    assert extract_json(fenced["result"])["chapters"][0]["id"] == "bridge"
 
-    prose = json.loads((RAW_BAD / "EP91" / "L2-qa.raw.json").read_bytes().decode("utf-8"))
+    prose = json.loads((RAW_BAD / "EP91" / "L2-bridge.raw.json").read_bytes().decode("utf-8"))
     with pytest.raises(ValueError):
         extract_json(prose["result"])
 
@@ -127,6 +128,54 @@ def test_a_fullwidth_or_missing_comma_between_objects_is_mended():
     assert [t["id"] for t in obj["topics"]] == ["a", "b"]
 
 
+def test_structured_output_is_preferred_over_the_result_text():
+    """给了 schema 的层，CLI 把过了 schema 的对象放在 `structured_output`。直接用
+    它：不必从文字里挖，野引号、围栏、前言这几类解析失败在这条路上不存在。
+    没有这个键（旧存档、没给 schema 的层）才退回 `result`。"""
+    real = json.loads((RAW / "EP91" / "L1-all.raw.json").read_bytes().decode("utf-8"))
+    assert parse_envelope(real)["chapters"][0]["id"] == "bridge"
+    assert parse_envelope({"structured_output": {"a": 1}, "result": "这里不是 JSON"}) == {"a": 1}
+    assert parse_envelope({"result": '前言\n```json\n{"a": 2}\n```'}) == {"a": 2}
+    assert parse_envelope({"structured_output": None, "result": '{"a": 3}'}) == {"a": 3}
+    with pytest.raises(ValueError):
+        parse_envelope({"result": None})
+
+
+def test_schema_retries_exhausted_goes_to_failed_not_up_the_stack(tmp_path):
+    """模型在会话里连续几次交不出合 schema 的产物时，CLI 退出码 1、信封
+    `is_error`。这是模型答错，不是环境坏了：得走 `_failed/` 留档（红线 9），不能
+    当异常把整集掀翻。"""
+    env = {"type": "result", "is_error": True, "subtype": SCHEMA_EXHAUSTED, "result": None,
+           "errors": ["Failed to provide valid structured output after 5 attempts"]}
+    with pytest.raises(ValueError, match="after 5 attempts"):
+        parse_envelope(env)
+
+    class Exhausted(ScriptedRunner):
+        def run(self, *a, schema=None, **kw):
+            self.inputs.append(a[4])
+            return env
+
+    paths = VaultPaths(tmp_path)
+    runner = Exhausted([])
+    obj, _, errors = call_layer(paths, runner, "EP91", "L1", "all", "p.md", "正文",
+                                lambda o: [], retries=1, log=lambda m: None, schema={"type": "object"})
+    assert obj is None and len(runner.inputs) == 2
+    assert "交不出合 schema 的产物" in errors[0]
+    assert (paths.failed("EP91") / "L1-all.failed.json").exists()
+    assert "=== 你上一次的输出 ===" not in runner.inputs[1]       # 没有上一次的输出可附
+
+
+def test_the_schema_reaches_the_runner(tmp_path):
+    paths = VaultPaths(tmp_path)
+    runner = ScriptedRunner(['{"ok": true}'])
+    schema = {"type": "object", "properties": {"ok": {"type": "boolean"}}}
+    call_layer(paths, runner, "EP91", "L1", "all", "p.md", "正文", lambda o: [],
+               log=lambda m: None, schema=schema)
+    call_layer(paths, runner, "EP91", "L1", "all", "p.md", "正文", lambda o: [],
+               log=lambda m: None)
+    assert runner.schemas == [schema, None]
+
+
 def test_provenance_keys_are_spec_9():
     """验收 9：字段集合 == §9。"""
     p = provenance(["EP91.transcript.json"], "L1", "all", "claude-sonnet-5", "low",
@@ -155,9 +204,12 @@ class ScriptedRunner:
     def __init__(self, results):
         self.results = list(results)
         self.inputs: list[str] = []
+        self.schemas: list = []
 
-    def run(self, scope, layer, unit, prompt_file, input_text, model, effort, timeout):
+    def run(self, scope, layer, unit, prompt_file, input_text, model, effort, timeout,
+            schema=None):
         self.inputs.append(input_text)
+        self.schemas.append(schema)
         return {"type": "result", "is_error": False,
                 "result": self.results[min(len(self.inputs) - 1, len(self.results) - 1)]}
 

@@ -5,7 +5,7 @@
 所有引文由本脚本断言为某一段的连续子串；时间戳由本脚本按段计算。
 """
 from __future__ import annotations
-import io, json, sys, pathlib, copy
+import io, json, sys, pathlib, copy, shutil
 
 sys.stdout.reconfigure(encoding="utf-8")
 ROOT = pathlib.Path(__file__).resolve().parent
@@ -302,57 +302,75 @@ days: [2026-03-05]
 """
 wtext(ROOT / "vault/30-Events/2026-northbridge-toll.md", EVENT_NOTE)
 
-# ------------------------------------------------------------------ 话题表（§5.3）
-# `start` 是模型写的（照抄行首时间戳），`end` 是程序按下一个话题的起点推的。
-# 大桥那件事被夜市打断后又回来，**拆成两个话题**——后面 L4 会把它们归回同一件事。
-EP91_TOPICS = {"ep": "EP91", "topics": [
-    {"id": "opening", "title": "开场与设备测试", "kind": "aside",
-     "start": "00:00:00", "end": "00:03:30", "who": ["阿桥", "老周"],
-     "gist": "问好、换麦、预告两个话题"},
-    {"id": "bridge-toll", "title": "北港大桥收费方案：十五块还是十二块", "kind": "talk",
-     "start": "00:03:30", "end": "00:19:00", "who": ["阿桥", "老周"],
-     "gist": "通报按车型收费、听证会建议价、贷款与 2019 隧道先例"},
-    {"id": "night-market", "title": "河口夜市搬迁：消防倒逼下的选择", "kind": "talk",
-     "start": "00:19:00", "end": "00:36:00", "who": ["阿桥", "老周"],
-     "gist": "晚报报道搬滨江路、商户反对、消防隐患、老码头先例"},
-    {"id": "bridge-freight", "title": "回到大桥：货车费率与浮桥", "kind": "talk",
-     "start": "00:36:00", "end": "00:41:30", "who": ["阿桥", "老周"],
-     "gist": "货车按吨位还是按轴、浮桥分流的可能"},
-    {"id": "qa", "title": "结尾弹幕与下周预告", "kind": "aside",
-     "start": "00:41:30", "end": "00:42:40", "who": ["阿桥", "老周"],
-     "gist": "下周聊老照片"},
-]}
+# ------------------------------------------------------------------ 章节表（§5.3，L1）
+# L1 只切十几分钟一章的容器；模型写每章从第几行开始（`line`），`start` / `end` /
+# `who` / `ep` 由程序填。两集的段都比 30 秒长，所以第 n 行就是对白表的第 n 段
+# （下面用 build_lines 断言过）。
+sys.path.insert(0, str(ROOT.parent.parent / "scripts"))
+from sm.transcript import build_lines          # noqa: E402
 
-EP92_TOPICS = {"ep": "EP92", "topics": [
-    {"id": "opening", "title": "加更说明", "kind": "aside",
-     "start": "00:00:00", "end": "00:01:00", "who": ["阿桥"],
-     "gist": "下播后收到材料，加更十几分钟"},
-    {"id": "bridge-followup", "title": "北港大桥货车费率：一张征求意见函的照片", "kind": "talk",
-     "start": "00:01:00", "end": "00:13:00", "who": ["阿桥"],
-     "gist": "按轴计费的征求意见版费率、货运公司的账、更正每月前十次"},
-    {"id": "outro", "title": "下周预告", "kind": "aside",
-     "start": "00:13:00", "end": "00:14:00", "who": ["阿桥"],
-     "gist": "老照片那期周四八点"},
+for _segs in (EP91, EP92):
+    _lines = build_lines(_segs)
+    assert len(_lines) == len(_segs)
+    assert [ln["t"] for ln in _lines] == [int(round(s["start"])) for s in _segs]
+
+# 每章：模型写 id / title / line / gist；时长 42:40 ÷ 15 分钟 → 参考章数 3
+EP91_CHAPTERS_MODEL = {"chapters": [
+    {"id": "bridge", "title": "开场、北港大桥收费方案", "line": 1,
+     "gist": "开头几分钟换麦问好、预告今天聊两件事。随后进正题：北港大桥按车型收费的通报，十五块是听证会建议价、听说可能压到十二块，贷款三十八亿怎么还，2019 年滨江隧道没收成的先例，本地牌照每月前几次免费两人说法不一。章尾说大桥等会儿再回来，先说夜市。"},
+    {"id": "market", "title": "河口夜市搬迁滨江路", "line": 35,
+     "gist": "河口晚报今早报道夜市要整体搬到滨江路：商户数两人有出入，六月底前搬完，摊主多数反对；市里说老街消防不达标，老周说其实是在停业整改和搬迁之间选；2016 年老码头市场搬迁的先例；弹幕里有摊主报了租金。章尾回到大桥。"},
+    {"id": "bridge-again", "title": "回到大桥：货车与浮桥、结尾弹幕", "line": 63,
+     "gist": "接着上上章的大桥收费：回弹幕问的替代路线，浮桥限重货车走不了，货车费率通报没公布，听证会记录不引用流出版，意见征集三月三十一号截止。最后回几条无关弹幕、预告下周聊老照片，收尾。"},
+]}
+EP92_CHAPTERS_MODEL = {"chapters": [
+    {"id": "followup", "title": "加更：北港大桥货车费率的征求意见函", "line": 1,
+     "gist": "下播后朋友发来货运公司收到的征求意见函照片：货车按轴计费的费率、公司的过桥账、本地企业拟给折扣、函比通报晚五天；更正直播里说的每月前二十次免费，应为前十次。最后一句下周预告。"},
 ]}
 
 
-def model_shape(product: dict) -> dict:
-    """模型实际交出来的样子：只有 `start`，没有 `ep` 也没有 `end`。
+def chapters_product(ep, model, segs, names, groups=None):
+    """模型交的 → `chapters.json` 的样子：行号换成时刻、并掉不到 8 分钟的章、接终点、
+    填说话人。`groups` 是期望的并法（手写，不调被测代码）：`[(留下的 id, [并在一起的
+    各章 id]), …]`；并起来的标题用顿号接、gist 按先后用空格接，模型写的字原样。"""
+    dur = int(round(segs[-1]["end"]))
+    by_id = {c["id"]: c for c in model["chapters"]}
+    cs = [{"id": keep, "line": by_id[ids[0]]["line"],
+           "title": "、".join(by_id[i]["title"] for i in ids),
+           "gist": " ".join(by_id[i]["gist"] for i in ids)}
+          for keep, ids in (groups or [(c["id"], [c["id"]]) for c in model["chapters"]])]
+    out = []
+    for i, c in enumerate(cs):
+        start = 0 if i == 0 else int(round(seg(segs, c["line"])["start"]))
+        end = int(round(seg(segs, cs[i + 1]["line"])["start"])) if i + 1 < len(cs) else dur
+        who = []
+        for s in segs:
+            if start <= int(round(s["start"])) < end and names[s["speaker"]] not in who:
+                who.append(names[s["speaker"]])
+        out.append({"id": c["id"], "title": c["title"], "start": hms(start), "end": hms(end),
+                    "who": who, "gist": c["gist"]})
+    return {"ep": ep, "chapters": out}
 
-    那两个键是程序填的——凡是代码已经知道的都不问模型，少一处会错的地方。
-    """
-    return {"topics": [{k: v for k, v in t.items() if k != "end"}
-                       for t in product["topics"]]}
 
+NAMES = {A: "阿桥", Z: "老周"}
+# 模型把 EP91 切成了三章，第三章只有 6 分 40 秒（不到 8 分钟）——程序把它并进
+# 相邻两章里较短的那个（`market`，17 分钟；另一边没有邻居）。章节表里剩两章
+EP91_CHAPTERS = chapters_product("EP91", EP91_CHAPTERS_MODEL, EP91, NAMES,
+                                 groups=[("bridge", ["bridge"]), ("market", ["market", "bridge-again"])])
+EP92_CHAPTERS = chapters_product("EP92", EP92_CHAPTERS_MODEL, EP92, NAMES)
+assert [(c["id"], c["start"], c["end"]) for c in EP91_CHAPTERS["chapters"]] == [
+    ("bridge", "00:00:00", "00:19:00"), ("market", "00:19:00", "00:42:40")]
 
-# L1 的坏输出：一个起点超过整集时长（本集 00:42:40）、一个话题缺 kind。
-# 起点写偏几十秒不算坏（`with_ends` 照样闭合链条），写到集外才是坏——
-# EP01 实测把另一集的时长 03:10:43 抄了进来。
-EP91_TOPICS_BAD = model_shape(EP91_TOPICS)
-EP91_TOPICS_BAD["topics"][2]["start"] = "00:45:00"
-del EP91_TOPICS_BAD["topics"][4]["kind"]
+# L1 的坏输出：一章的行号不在这一集里（本集只有 76 行）、一章缺 title。
+# 行号顺序乱、id 大写、首章没写 1 都不算坏（代码归一），写到表外才是坏。
+EP91_CHAPTERS_BAD = copy.deepcopy(EP91_CHAPTERS_MODEL)
+EP91_CHAPTERS_BAD["chapters"][1]["line"] = 99
+del EP91_CHAPTERS_BAD["chapters"][2]["title"]
 
-# ------------------------------------------------------------------ 话题片段（§5.4）
+# ------------------------------------------------------------------ 话题（§5.3 话题表、§5.4 片段，L2）
+# L2 一章一次调用，在章内细分话题。模型每个话题写 title / kind / line / gist 与五类
+# 内容；`id`（`<章节 id>-NN`）、`chapter`、`start` / `end` / `who` 由程序填。
+# 大桥那件事被夜市打断后又回来，成了两个话题——后面 L4 会把它们归回同一件事。
 S = EP91
 
 
@@ -360,18 +378,21 @@ def para(n, text):
     return f"[{ts(S, n)}] {text}"
 
 
+FRAG_OPENING = {
+    "title": "开场与设备测试", "kind": "filler", "line": 1,
+    "gist": "换了新麦克风、老周问好、预告今天聊大桥收费和夜市搬迁、报了直播间人数。",
+    "paras": [], "quotes": [], "claims": [], "channels": [], "asr": [],
+}
+
 FRAG_BRIDGE = {
-    "id": "bridge-toll", "title": EP91_TOPICS["topics"][1]["title"],
-    "start": EP91_TOPICS["topics"][1]["start"], "end": EP91_TOPICS["topics"][1]["end"],
-    "who": ["阿桥", "老周"],
+    "title": "北港大桥收费方案：十五块还是十二块", "kind": "talk", "line": 7,
+    "gist": "通报按车型收费，十五块是听证会建议价、听说可能压到十二块；贷款三十八亿靠过桥费还不完；2019 年滨江隧道收费没收成的先例；本地牌照每月前几次免费两人说法不一。",
     "paras": [
         para(7, "<who>阿桥</who>说北港大桥的收费方案来自市交通局上周的一份通报，从 2027 年 1 月开始按车型收费；通报里小客车一次十五块，货车按吨位另算，具体的表他没找到。<who>老周</who>补充那份通报他也看了，十五块是听证会的建议价，不是最后定的价；听证会三月三号开的，二十一个代表里十四个赞成按车型收费。"),
         para(11, "<who>阿桥</who>承认自己说的十五块<hedge>应该</hedge>是不准确的，<hedge>听说</hedge>最后<hedge>可能</hedge>会压到十二块；这个十二块是他在一个叫桥梁观察的公众号上看到的，对方说是内部消息，他没法验证。<who>老周</who>说桥梁观察去年说大桥要延期通车、后来确实延期了，所以他觉得这个号的消息有一定可信度；<who>阿桥</who>说有一定可信度不等于对，让大家自己判断。"),
         para(15, "<who>老周</who>说回收费本身：通报里大桥日均车流量四万辆左右，按十五块算一天六十万、一年两亿多，够还贷款利息。<who>阿桥</who>记得贷款总额三十八个亿，工期五年，2024 年年底通的车；<who>老周</who>说三十八亿<hedge>应该</hedge>是对的，他在当年的招标公告里看到过。<who>阿桥</who>算下来光靠过桥费还本金要二十年往上，<hedge>大概率</hedge>还要财政补一部分；<who>老周</who>说这正是争议所在，反对的人说大桥本来就是财政修的，凭什么再收一次钱。"),
         para(21, "<who>阿桥</who>顺带回弹幕：北岗大桥就是北港大桥，是他的口音问题。<who>老周</who>举了 2019 年的先例：滨江隧道也想收费，听证会开了两次最后没收成，因为隧道是市政债修的，收费等于市民付两次钱，舆论压力太大就搁置了。<who>阿桥</who>问这次大桥会不会也搁置，<hedge>我猜</hedge>有一半<hedge>可能</hedge>；<who>老周</who>倒觉得这次不一样，大桥有一部分是银行贷款，不收费的话利息是实打实的。两人先记着这个分歧。"),
         para(27, "<who>阿桥</who>提到通报说本地牌照的车<hedge>可能</hedge>有优惠，<hedge>好像</hedge>是每月前二十次免费；<who>老周</who>说每月前二十次他没看到，<hedge>可能</hedge>是记混了，他记得是每月前十次。<who>阿桥</who>说这个他不确定，让大家去市交通局官网看原文；<who>老周</who>说原文标题是关于北港大桥收费方案征求意见的通告，三月五号发的。"),
-        para(63, "回到大桥后<who>阿桥</who>回答替代路线：老的北港浮桥还在，但只能走小车；<who>老周</who>说浮桥限重两吨，货车走不了，绕行要多跑二十几公里。<who>阿桥</who>说货运公司<hedge>应该</hedge>是最反对收费的，成本直接涨；<who>老周</who>说通报里货车费率没公布，只说按吨位另算，这个另算是什么意思不清楚。"),
-        para(67, "有人问听证会记录哪里能看，<who>阿桥</who>说市交通局官网有但他没找到下载链接；<who>老周</who>手里有一份从货运行业群里传出来的，不确定是不是完整版，<who>阿桥</who>决定不引用，等官方版本。最后<who>老周</who>提醒收费方案的意见征集到三月三十一号截止；<who>阿桥</who>确认这个日期是通报里写的。"),
     ],
     "quotes": [
         q(S, 7, "阿桥", "市交通局上周发了一个通报，说从2027年1月开始要按车型收费"),
@@ -379,7 +400,7 @@ FRAG_BRIDGE = {
         q(S, 11, "阿桥", "听说最后可能会压到十二块"),
         q(S, 19, "阿桥", "光靠过桥费还本金要二十年往上，大概率还要财政补一部分"),
         q(S, 22, "老周", "2019年河口有过一个先例，滨江隧道也想收费，听证会开了两次，最后没收成"),
-        q(S, 70, "老周", "收费方案的意见征集到三月三十一号截止"),
+        q(S, 28, "老周", "可能是你记混了，我记得是每月前十次"),
     ],
     "claims": [
         {"ts": ts(S, 7), "who": "阿桥", "claim": "市交通局通报：北港大桥 2027 年 1 月起按车型收费",
@@ -402,10 +423,6 @@ FRAG_BRIDGE = {
          "quote": "可能是你记混了，我记得是每月前十次"},
         {"ts": ts(S, 30), "who": "老周", "claim": "通告标题《关于北港大桥收费方案征求意见的通告》，3 月 5 日发布",
          "quote": "原文标题是关于北港大桥收费方案征求意见的通告，三月五号发的"},
-        {"ts": ts(S, 64), "who": "老周", "claim": "北港浮桥限重 2 吨，货车绕行多 20 余公里",
-         "quote": "浮桥限重两吨，货车走不了，货车绕行要多跑二十几公里"},
-        {"ts": ts(S, 70), "who": "老周", "claim": "意见征集截止 3 月 31 日",
-         "quote": "收费方案的意见征集到三月三十一号截止"},
     ],
     "channels": [
         {"ts": ts(S, 7), "who": "阿桥", "name": "市交通局通报", "kind": "政府通报",
@@ -414,16 +431,13 @@ FRAG_BRIDGE = {
          "quote": "一个叫桥梁观察的公众号"},
         {"ts": ts(S, 18), "who": "老周", "name": "招标公告", "kind": "政府公告",
          "quote": "我在当年的招标公告里看到过"},
-        {"ts": ts(S, 68), "who": "老周", "name": "货运行业群流出的听证会记录", "kind": "群聊流出文件",
-         "quote": "是从一个货运行业群里传出来的，我不确定是不是完整版"},
     ],
     "asr": [{"heard": "北岗大桥", "means": "北港大桥"}],
 }
 
 FRAG_MARKET = {
-    "id": "night-market", "title": EP91_TOPICS["topics"][2]["title"],
-    "start": EP91_TOPICS["topics"][2]["start"], "end": EP91_TOPICS["topics"][2]["end"],
-    "who": ["阿桥", "老周"],
+    "title": "河口夜市搬迁：消防倒逼下的选择", "kind": "talk", "line": 35,
+    "gist": "晚报报道夜市六月底前搬到滨江路，商户多数反对；市里说老街消防隐患四十多处，其实是在停业整改和搬迁之间选；2016 年老码头市场搬迁头一年生意掉一半；摊主报的租金账。",
     "paras": [
         para(35, "<who>阿桥</who>说河口晚报今天早上报道夜市要整体搬到滨江路：现在一百二十户商户，新地方能容纳一百五十户。<who>老周</who>对一百二十户有点怀疑，他上个月去数过摊位不到一百个；<who>阿桥</who>说<hedge>可能</hedge>报道算的是登记户数不是实际出摊的，<who>老周</who>觉得有可能，差二三十户也正常。"),
         para(40, "搬迁时间报道说六月底之前完成，没说具体哪天；<who>老周</who>说六月底<hedge>应该</hedge>是赶在暑假前，暑假是夜市生意最好的时候。报道采访了三个摊主，两个反对一个中立，反对的理由是滨江路人流没有老街多；<who>老周</who>认为这个担心有道理，滨江路晚上确实没什么人，公交也少。"),
@@ -461,15 +475,33 @@ FRAG_MARKET = {
     "asr": [],
 }
 
-FRAG_OPENING = {
-    "id": "opening", "title": "开场与设备测试", "start": "00:00:00", "end": "00:03:30",
-    "who": ["阿桥", "老周"],
-    "paras": [para(1, "开场：<who>阿桥</who>换了新麦克风请观众听回音，<who>老周</who>到场问好，预告今天聊北港大桥收费方案和河口夜市搬迁两件事。")],
-    "quotes": [], "claims": [], "channels": [], "asr": [],
+FRAG_FREIGHT = {
+    "title": "回到大桥：货车费率与浮桥", "kind": "talk", "line": 63,
+    "gist": "接着前面的大桥收费：替代路线只有限重两吨的浮桥，货车得绕行；货车费率通报没公布；听证会记录只有流出版，不引用；意见征集三月三十一号截止。",
+    "paras": [
+        para(63, "回到大桥后<who>阿桥</who>回答替代路线：老的北港浮桥还在，但只能走小车；<who>老周</who>说浮桥限重两吨，货车走不了，绕行要多跑二十几公里。<who>阿桥</who>说货运公司<hedge>应该</hedge>是最反对收费的，成本直接涨；<who>老周</who>说通报里货车费率没公布，只说按吨位另算，这个另算是什么意思不清楚。"),
+        para(67, "有人问听证会记录哪里能看，<who>阿桥</who>说市交通局官网有但他没找到下载链接；<who>老周</who>手里有一份从货运行业群里传出来的，不确定是不是完整版，<who>阿桥</who>决定不引用，等官方版本。最后<who>老周</who>提醒收费方案的意见征集到三月三十一号截止；<who>阿桥</who>确认这个日期是通报里写的。"),
+    ],
+    "quotes": [
+        q(S, 64, "老周", "浮桥限重两吨，货车走不了，货车绕行要多跑二十几公里"),
+        q(S, 70, "老周", "收费方案的意见征集到三月三十一号截止"),
+    ],
+    "claims": [
+        {"ts": ts(S, 64), "who": "老周", "claim": "北港浮桥限重 2 吨，货车绕行多 20 余公里",
+         "quote": "浮桥限重两吨，货车走不了，货车绕行要多跑二十几公里"},
+        {"ts": ts(S, 70), "who": "老周", "claim": "意见征集截止 3 月 31 日",
+         "quote": "收费方案的意见征集到三月三十一号截止"},
+    ],
+    "channels": [
+        {"ts": ts(S, 68), "who": "老周", "name": "货运行业群流出的听证会记录", "kind": "群聊流出文件",
+         "quote": "是从一个货运行业群里传出来的，我不确定是不是完整版"},
+    ],
+    "asr": [],
 }
+# `aside` 只出 paras：把是什么事讲清楚，不出锚点 / 说法 / 信源
 FRAG_QA = {
-    "id": "qa", "title": "结尾弹幕与下周预告", "start": "00:41:30", "end": "00:42:40",
-    "who": ["阿桥", "老周"],
+    "title": "结尾弹幕与下周预告", "kind": "aside", "line": 73,
+    "gist": "回了几条与今天无关的弹幕，下周聊河口老照片。",
     "paras": [para(73, "结尾回了几条与今天话题无关的弹幕：下周聊河口老照片，<who>老周</who>准备了一九八几年的照片。")],
     "quotes": [], "claims": [], "channels": [], "asr": [],
 }
@@ -493,8 +525,8 @@ def para92(n, text):
 
 
 FRAG_FOLLOWUP = {
-    "id": "bridge-followup", "title": EP92_TOPICS["topics"][1]["title"],
-    "start": "00:01:00", "end": "00:13:00", "who": ["阿桥"],
+    "title": "北港大桥货车费率：一张征求意见函的照片", "kind": "talk", "line": 3,
+    "gist": "货运公司收到的征求意见函：货车按轴计费、公司一个月过桥接近三十万、本地企业拟给三成折扣、函比通报晚五天；更正每月前十次免费。",
     "paras": [
         para92(3, "<who>阿桥</who>说一位在货运公司上班的朋友把公司收到的征求意见函拍给了他：货车费率按轴计算，两轴四十块、三轴六十块、四轴以上八十块。他先说明这是征求意见的版本，不是最后定的，而且他只看到了照片。按这个算，一辆四轴货车一天来回两趟三百二十块；朋友说公司一天大概三十辆车过桥，一个月接近三十万，这个数是朋友口头说的，他没看到账。他因此认为货运这边的反对<hedge>应该</hedge>会比直播里估计的还大。"),
         para92(10, "函里还有一条，本地注册的货运企业<hedge>可能</hedge>有百分之三十的折扣，<who>阿桥</who>强调函上用的词是「拟给予」。照片里能看到函是三月十号发的，比通报晚五天，他<hedge>我猜</hedge>是分批征求意见，先公众后企业。有人问要不要把照片发出来，他觉得不合适，那是朋友公司的内部文件，等官方版本出来再对照着讲。"),
@@ -521,12 +553,22 @@ FRAG_FOLLOWUP = {
     ],
     "asr": [],
 }
-FRAG_OPENING92 = {"id": "opening", "title": "加更说明", "start": "00:00:00", "end": "00:01:00", "who": ["阿桥"],
+FRAG_OPENING92 = {"title": "加更说明", "kind": "aside", "line": 1,
+                  "gist": "下播后收到跟大桥收费有关的材料，加更十几分钟。",
                   "paras": [para92(1, "<who>阿桥</who>说下播后有朋友发来跟大桥收费有关的材料，加更十几分钟。")],
                   "quotes": [], "claims": [], "channels": [], "asr": []}
-FRAG_OUTRO92 = {"id": "outro", "title": "下周预告", "start": "00:13:00", "end": "00:14:00", "who": ["阿桥"],
-                "paras": [para92(21, "下周老照片那期时间不变，周四晚上八点。")],
-                "quotes": [], "claims": [], "channels": [], "asr": []}
+# `filler`：零信息的过场（结尾预告）。模型只交标题与一句 gist，五类内容全空
+FRAG_OUTRO92 = {"title": "下周预告与道别", "kind": "filler", "line": 21,
+                "gist": "下周老照片那期时间不变，道别。",
+                "paras": [], "quotes": [], "claims": [], "channels": [], "asr": []}
+
+# 每章模型交出来的样子：`{"topics": [...]}`，话题按行号先后
+L2_MODEL = {
+    "EP91": {"bridge": [FRAG_OPENING, FRAG_BRIDGE],
+             "market": [FRAG_MARKET, FRAG_FREIGHT, FRAG_QA]},
+    "EP92": {"followup": [FRAG_OPENING92, FRAG_FOLLOWUP, FRAG_OUTRO92]},
+}
+
 
 # 断言：claims / channels 的 quote 也必须逐字来自某一段（同一话题范围内）
 def assert_verbatim(frag, segs):
@@ -535,35 +577,89 @@ def assert_verbatim(frag, segs):
         assert any(c["quote"] in t for t in texts), c["quote"]
 
 
-for f in (FRAG_BRIDGE, FRAG_MARKET, FRAG_OPENING, FRAG_QA):
+for f in (FRAG_BRIDGE, FRAG_MARKET, FRAG_OPENING, FRAG_FREIGHT, FRAG_QA):
     assert_verbatim(f, EP91)
 for f in (FRAG_FOLLOWUP, FRAG_OPENING92, FRAG_OUTRO92):
     assert_verbatim(f, EP92)
 
+
+def topics_product(ep, chapters, by_chapter, segs, names):
+    """模型按章交的话题 → 每话题一份 `frag-<id>.json` 的样子（§5.4）。
+
+    程序填的键：`id` = `<章节 id>-NN`（章内按行号先后编号）、`chapter`、`start` /
+    `end`（行号换时刻；章内第一个话题从章的 `start` 起，最后一个收在章的 `end`）、
+    `who`（话题自己的行里出现过的说话人）。模型写的 `line` 不进产物。
+    """
+    out = []
+    for ch in chapters["chapters"]:
+        ts_ = sorted(by_chapter[ch["id"]], key=lambda t: t["line"])
+        c0, c1 = (int(x[0:2]) * 3600 + int(x[3:5]) * 60 + int(x[6:8]) for x in (ch["start"], ch["end"]))
+        starts = [int(round(seg(segs, t["line"])["start"])) for t in ts_]
+        starts[0] = c0
+        for i, t in enumerate(ts_):
+            end = starts[i + 1] if i + 1 < len(ts_) else c1
+            who = []
+            for s in segs:
+                if starts[i] <= int(round(s["start"])) < end and names[s["speaker"]] not in who:
+                    who.append(names[s["speaker"]])
+            out.append({"id": f"{ch['id']}-{i + 1:02d}", "chapter": ch["id"],
+                        "title": t["title"], "kind": t["kind"],
+                        "start": hms(starts[i]), "end": hms(end), "who": who, "gist": t["gist"],
+                        **{k: t[k] for k in CONTENT_KEYS}})
+    return out
+
+
+CONTENT_KEYS = ("paras", "quotes", "claims", "channels", "asr")
+EP91_FRAGS = topics_product("EP91", EP91_CHAPTERS, L2_MODEL["EP91"], EP91, NAMES)
+EP92_FRAGS = topics_product("EP92", EP92_CHAPTERS, L2_MODEL["EP92"], EP92, NAMES)
+assert [f["id"] for f in EP91_FRAGS] == ["bridge-01", "bridge-02",
+                                         "market-01", "market-02", "market-03"]
+assert [f["id"] for f in EP92_FRAGS] == ["followup-01", "followup-02", "followup-03"]
+
+
+def topics_index(ep, frags):
+    """话题表 `topics.json`（§5.3）：各片段去掉五类内容剩下的头，全集按时间排。"""
+    return {"ep": ep, "topics": [{k: v for k, v in f.items() if k not in CONTENT_KEYS}
+                                 for f in frags]}
+
+
+EP91_TOPICS = topics_index("EP91", EP91_FRAGS)
+EP92_TOPICS = topics_index("EP92", EP92_FRAGS)
+
 # ------------------------------------------------------------------ 事件清单（§5.5）
+# 大桥那件事在 EP91 里被夜市打断、成了两个话题：L4 把它们归回同一个事件
 EVENTS = {"date": "2026-03-12", "events": [
     {"id": "2026-northbridge-toll", "title": "北港大桥收费方案：定价、货车费率与 2019 年隧道先例",
      "tag": "地方市政 · 交通",
      "refs": [
-         {"ep": "EP91", "topic": "bridge-toll", "ts": "00:03:30",
-          "gist": "通报按车型收费、建议价十五块可能压到十二、贷款三十八亿、2019 隧道先例、浮桥与货车"},
-         {"ep": "EP92", "topic": "bridge-followup", "ts": "00:01:00",
+         {"ep": "EP91", "topic": "bridge-02", "ts": "00:03:30",
+          "gist": "通报按车型收费、建议价十五块可能压到十二、贷款三十八亿、2019 隧道先例"},
+         {"ep": "EP91", "topic": "market-02", "ts": "00:36:00",
+          "gist": "回到大桥：浮桥限重货车绕行、货车费率没公布、意见征集三月三十一号截止"},
+         {"ep": "EP92", "topic": "followup-02", "ts": "00:01:00",
           "gist": "货车按轴计费的征求意见函照片、货运公司的账、更正每月前十次"},
      ]},
     {"id": "2026-hekou-night-market", "title": "河口夜市搬迁滨江路：消防倒逼与商户的总账",
      "tag": "地方市政 · 民生",
      "refs": [
-         {"ep": "EP91", "topic": "night-market", "ts": "00:19:00",
+         {"ep": "EP91", "topic": "market-01", "ts": "00:19:00",
           "gist": "晚报报道六月底前搬迁、一百二十户之争、四十三处隐患、2016 老码头先例、租金账"},
      ]},
 ]}
 # L4 的坏输出：引用不存在的话题、把 aside 话题聚成事件
 EVENTS_BAD = copy.deepcopy(EVENTS)
-EVENTS_BAD["events"][1]["refs"].append({"ep": "EP91", "topic": "parking", "ts": "00:30:00", "gist": "不存在的话题"})
+EVENTS_BAD["events"][1]["refs"].append({"ep": "EP91", "topic": "parking-01", "ts": "00:30:00", "gist": "不存在的话题"})
 EVENTS_BAD["events"].append({"id": "2026-hekou-old-photos", "title": "下周老照片", "tag": "预告",
-                             "refs": [{"ep": "EP91", "topic": "qa", "ts": "00:41:30", "gist": "aside 不该成事件"}]})
+                             "refs": [{"ep": "EP91", "topic": "market-03", "ts": "00:41:30", "gist": "aside 不该成事件"}]})
+_known = {(ep, f["id"]) for ep, fs in (("EP91", EP91_FRAGS), ("EP92", EP92_FRAGS)) for f in fs}
+assert all((r["ep"], r["topic"]) in _known for e in EVENTS["events"] for r in e["refs"])
 
 # ------------------------------------------------------------------ 落盘：_digest 形状（带 provenance）
+# 旧样例按话题 id 起文件名，换了契约之后文件名全变；先清掉，别留孤儿
+for _d in ("digest", "raw", "raw-bad", "l3"):
+    shutil.rmtree(ROOT / _d, ignore_errors=True)
+
+
 def prov(layer, unit, derived, engine="claude-sonnet-5", effort="medium", pv="0.1"):
     return {"derived_from": derived, "layer": layer, "unit": unit, "engine": engine,
             "effort": effort, "prompt_version": f"{layer}@{pv}", "generated_at": GEN_AT}
@@ -575,22 +671,44 @@ def with_prov(obj, p):
     return o
 
 
-wjson(ROOT / "digest/EP91/topics.json", with_prov(EP91_TOPICS, prov("L1", "all", ["EP91.transcript.json"], effort="low")))
-wjson(ROOT / "digest/EP92/topics.json", with_prov(EP92_TOPICS, prov("L1", "all", ["EP92.transcript.json"], effort="low")))
-for f in (FRAG_OPENING, FRAG_BRIDGE, FRAG_MARKET, FRAG_QA):
-    wjson(ROOT / f"digest/EP91/frag-{f['id']}.json", with_prov(f, prov("L2", f["id"], ["EP91.transcript.json", "topics.json"])))
-for f in (FRAG_OPENING92, FRAG_FOLLOWUP, FRAG_OUTRO92):
-    wjson(ROOT / f"digest/EP92/frag-{f['id']}.json", with_prov(f, prov("L2", f["id"], ["EP92.transcript.json", "topics.json"])))
+for ep, chapters, frags, topics in (("EP91", EP91_CHAPTERS, EP91_FRAGS, EP91_TOPICS),
+                                    ("EP92", EP92_CHAPTERS, EP92_FRAGS, EP92_TOPICS)):
+    wjson(ROOT / f"digest/{ep}/chapters.json",
+          with_prov(chapters, prov("L1", "all", [f"{ep}.transcript.json"], effort="low")))
+    for f in frags:
+        # 一章一次调用，`unit` 是章节 id；同一章的几个片段 provenance 相同
+        wjson(ROOT / f"digest/{ep}/frag-{f['id']}.json",
+              with_prov(f, prov("L2", f["chapter"], [f"{ep}.transcript.json", "chapters.json"])))
+    # 话题表是 L2 收尾时代码拼的索引，不是哪一次调用的产物
+    wjson(ROOT / f"digest/{ep}/topics.json",
+          with_prov(topics, prov("L2", "all", ["chapters.json", "frag-*.json"])))
 wjson(ROOT / "digest/2026-03-12/events.json", with_prov(EVENTS, prov("L4", "all", ["EP91/topics.json", "EP91/frag-*.json", "EP92/topics.json", "EP92/frag-*.json", "30-Events/*.md"])))
-wjson(ROOT / "l3/frag-night-market.bad.json", FRAG_MARKET_BAD)
+
+# 闸门用的坏片段：解析后产物的形状（顶替 `_digest/EP91/frag-market-01.json`）
+_market = next(f for f in EP91_FRAGS if f["id"] == "market-01")
+wjson(ROOT / "l3/frag-market-01.bad.json",
+      {**_market, **{k: FRAG_MARKET_BAD[k] for k in CONTENT_KEYS}})
+
 
 # ------------------------------------------------------------------ 假 claude 原始响应（--output-format json 的信封）
-def envelope(obj_or_text, model="claude-sonnet-5", in_tok=9000, out_tok=1800, bad_text=None):
-    result = bad_text if bad_text is not None else "```json\n" + json.dumps(obj_or_text, ensure_ascii=False, indent=2) + "\n```"
+def envelope(obj_or_text, model="claude-sonnet-5", in_tok=9000, out_tok=1800, bad_text=None,
+             structured=True):
+    """好响应按 `--json-schema` 的真实形状：`structured_output` 是已解析的对象，
+    `result` 是同一份 JSON 的字符串。坏响应只有 `result`（围栏里的 JSON 或散文）
+    ——真实 CLI 不会放一份不合 schema 的 `structured_output` 出来，坏输出只可能
+    来自没给 schema 的旧存档，走的是从文字里挖 JSON 那条路。
+    """
+    if bad_text is not None:
+        result, structured = bad_text, False
+    elif structured:
+        result = json.dumps(obj_or_text, ensure_ascii=False)
+    else:
+        result = "```json\n" + json.dumps(obj_or_text, ensure_ascii=False, indent=2) + "\n```"
     cost = round(in_tok * 3e-6 + out_tok * 1.5e-5, 4)
-    return {
+    env = {
         "type": "result", "subtype": "success", "is_error": False,
-        "duration_ms": 41000, "duration_api_ms": 39000, "num_turns": 1, "stop_reason": "end_turn",
+        "duration_ms": 41000, "duration_api_ms": 39000, "num_turns": 2 if structured else 1,
+        "stop_reason": "end_turn",
         "result": result, "session_id": "synthetic-fixture-session",
         "total_cost_usd": cost,
         "usage": {"input_tokens": in_tok, "cache_creation_input_tokens": 0, "cache_read_input_tokens": 0,
@@ -600,20 +718,23 @@ def envelope(obj_or_text, model="claude-sonnet-5", in_tok=9000, out_tok=1800, ba
                                "contextWindow": 200000, "maxOutputTokens": 64000}},
         "permission_denials": [], "uuid": "00000000-0000-4000-8000-000000000091",
     }
+    if structured:
+        env["structured_output"] = obj_or_text
+    return env
 
 
-wjson(ROOT / "raw/EP91/L1-all.raw.json", envelope(model_shape(EP91_TOPICS), in_tok=6000, out_tok=600))
-wjson(ROOT / "raw/EP92/L1-all.raw.json", envelope(model_shape(EP92_TOPICS), in_tok=1500, out_tok=300))
-for f in (FRAG_OPENING, FRAG_BRIDGE, FRAG_MARKET, FRAG_QA):
-    wjson(ROOT / f"raw/EP91/L2-{f['id']}.raw.json", envelope(f))
-for f in (FRAG_OPENING92, FRAG_FOLLOWUP, FRAG_OUTRO92):
-    wjson(ROOT / f"raw/EP92/L2-{f['id']}.raw.json", envelope(f))
-wjson(ROOT / "raw/2026-03-12/L4-all.raw.json", envelope(EVENTS, in_tok=4000, out_tok=500))
+wjson(ROOT / "raw/EP91/L1-all.raw.json", envelope(EP91_CHAPTERS_MODEL, in_tok=6000, out_tok=600))
+wjson(ROOT / "raw/EP92/L1-all.raw.json", envelope(EP92_CHAPTERS_MODEL, in_tok=1500, out_tok=300))
+for ep, by_chapter in L2_MODEL.items():
+    for cid, ts_ in by_chapter.items():
+        wjson(ROOT / f"raw/{ep}/L2-{cid}.raw.json", envelope({"topics": ts_}))
+wjson(ROOT / "raw/2026-03-12/L4-all.raw.json", envelope(EVENTS, in_tok=4000, out_tok=500, structured=False))
 
-wjson(ROOT / "raw-bad/EP91/L1-all.raw.json", envelope(EP91_TOPICS_BAD, in_tok=6000, out_tok=600))
-wjson(ROOT / "raw-bad/EP91/L2-night-market.raw.json", envelope(FRAG_MARKET_BAD))
-wjson(ROOT / "raw-bad/EP91/L2-qa.raw.json", envelope(None, bad_text="这一段切片太短，我没法按要求整理，建议合并到前一个话题。"))
-wjson(ROOT / "raw-bad/2026-03-12/L4-all.raw.json", envelope(EVENTS_BAD, in_tok=4000, out_tok=500))
+wjson(ROOT / "raw-bad/EP91/L1-all.raw.json",
+      envelope(EP91_CHAPTERS_BAD, in_tok=6000, out_tok=600, structured=False))
+wjson(ROOT / "raw-bad/EP91/L2-market.raw.json", envelope({"topics": [FRAG_MARKET_BAD]}, structured=False))
+wjson(ROOT / "raw-bad/EP91/L2-bridge.raw.json", envelope(None, bad_text="这一章开头全是寒暄，我没法按要求整理，建议合并到后一章。"))
+wjson(ROOT / "raw-bad/2026-03-12/L4-all.raw.json", envelope(EVENTS_BAD, in_tok=4000, out_tok=500, structured=False))
 
 # ------------------------------------------------------------------ README
 README = f"""# tests/fixtures — 合成样例
@@ -632,19 +753,31 @@ README = f"""# tests/fixtures — 合成样例
 | `vault/10-Episodes/EP91 ….md` | 没有 `整理:` 字段（仿现网旧笔记），带 `## 断言` `## 待办` 旧节 | §6.1 |
 | `vault/10-Episodes/EP92 ….md` | 有 `整理: pending` | §6.1 |
 | `vault/30-Events/2026-northbridge-toll.md` | first_seen 2026-03-05，「我的判断」有人写的内容 | §5.8 |
-| `digest/EP91/`、`digest/EP92/` | L1 话题表与 L2 片段的**解析后产物**形状（带 `provenance`） | §5.3、§5.4、§9 |
-| `digest/2026-03-12/events.json` | L4 事件清单：跨 EP 合并、沿用已有事件 id | §5.5 |
-| `l3/frag-night-market.bad.json` | 故意违规的片段：闸门 1（引文改写）、2（时间戳越界）、3（丢 hedge）、5（asr.heard 不存在） | §4 L3 |
-| `raw/<EP 或日期>/<层>-<单元>.raw.json` | 假 `claude -p --output-format json` 信封，`result` 是围栏 JSON | §4.1 |
-| `raw-bad/…` | 坏响应：L1 覆盖空洞 + 缺 kind；L2 闸门违规；L2 纯散文无 JSON；L4 引用不存在话题 + aside 成事件 | §4.1 |
+| `digest/EP91/`、`digest/EP92/` | L1 章节表 `chapters.json`、L2 片段 `frag-<话题>.json` 与话题表 `topics.json` 的**解析后产物**形状（带 `provenance`） | §5.3、§5.4、§9 |
+| `digest/2026-03-12/events.json` | L4 事件清单：跨 EP 合并、同一 EP 内被打断的同一事件合并、沿用已有事件 id | §5.5 |
+| `l3/frag-market-01.bad.json` | 故意违规的片段：闸门 1（引文改写）、2（时间戳越界）、3（丢 hedge）、5（asr.heard 不存在） | §4 L3 |
+| `raw/<EP 或日期>/<层>-<单元>.raw.json` | 假 `claude -p --output-format json` 信封；L1 / L2 带 `structured_output`（`--json-schema` 的形状），L4 的 `result` 是围栏 JSON | §4.1 |
+| `raw-bad/…` | 坏响应（只有 `result`）：L1 行号不在这一集里 + 缺 title；L2 闸门违规；L2 纯散文无 JSON；L4 引用不存在话题 + aside 成事件 | §4.1 |
 
-`raw/` 的键与 `_pairs/` 的文件名一致：`_pairs/EP91/L2-bridge-toll.in.md` ↔ `raw/EP91/L2-bridge-toll.raw.json`。
-假 runner 按这个键取响应，缺键即报错（不是静默跳过）。
+`raw/` 的键与 `_pairs/` 的文件名一致：`_pairs/EP91/L2-bridge.in.md` ↔ `raw/EP91/L2-bridge.raw.json`。
+L2 的单元是**章节**：一章一次调用，响应里是这一章的全部话题。假 runner 按这个键取响应，缺键即报错（不是静默跳过）。
 
-## 段号速查（EP91）
+## 章节与话题速查
 
-对白表 1-based 段号 → 时间戳：第 7 段 {ts(EP91, 7)}，第 11 段 {ts(EP91, 11)}，第 21 段 {ts(EP91, 21)}（ASR 生音所在段），
-第 35 段 {ts(EP91, 35)}，第 63 段 {ts(EP91, 63)}，第 73 段 {ts(EP91, 73)}。
+| 集 | 章节（L1） | 章内话题（L2，`id` 由程序按 `<章节>-NN` 编） |
+|---|---|---|
+| EP91 | `bridge` 00:00:00–00:19:00 | `bridge-01` 开场（`filler`）、`bridge-02` 大桥收费（`talk`） |
+| EP91 | `market` 00:19:00–00:42:40 | `market-01` 夜市搬迁（`talk`）、`market-02` 回到大桥（`talk`）、`market-03` 结尾弹幕（`aside`） |
+| EP92 | `followup` 00:00:00–00:14:00 | `followup-01` 加更说明（`aside`）、`followup-02` 货车费率（`talk`）、`followup-03` 下周预告（`filler`） |
+
+EP91 的 L1 响应里模型切了三章（`bridge` / `market` / `bridge-again`），第三章只有 6 分 40 秒，
+程序把它并进 `market`（标题用顿号接、gist 顺序接），所以章节表里是两章、L2 调两次。
+大桥那件事在 EP91 里被夜市打断，落在 `bridge-02` 与 `market-02` 两个话题里，L4 把它们归回同一个事件。
+
+## 行号速查（EP91）
+
+两集的段都比 30 秒长，所以 §5.2 文本的第 n 行就是对白表的第 n 段。行号 → 时间戳：第 7 行 {ts(EP91, 7)}，
+第 11 行 {ts(EP91, 11)}，第 21 行 {ts(EP91, 21)}（ASR 生音所在行），第 35 行 {ts(EP91, 35)}，第 63 行 {ts(EP91, 63)}，第 73 行 {ts(EP91, 73)}。
 """
 wtext(ROOT / "README.md", README)
 print("FIXTURES OK", ROOT)

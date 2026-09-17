@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """§5.1 → §5.2 的渲染与点名（issue #51 验收 6、10）。
 
-红线 1 / 2 在代码里的形态：行首那截 `[HH:MM:SS] 名字: ` 是代码加的，段文本必须
+红线 1 / 2 在代码里的形态：行首那截 `行号 [HH:MM:SS] 名字: ` 是代码加的，段文本必须
 一个字不改地落进行里。下面的 walk 把每一行拆回段文本来证明这件事。
 """
 from __future__ import annotations
@@ -11,9 +11,9 @@ import re
 from conftest import FIX, fixture_note_text
 from sm.note import read_frontmatter, read_speakers
 from sm.text import hms
-from sm.transcript import duration_s, read_transcript, render_lines
+from sm.transcript import build_lines, duration_s, line_t, read_transcript, render_lines
 
-LINE_RE = re.compile(r"^\[(\d\d:\d\d:\d\d)\] (?:([^:]{1,20}): )?(.*)$")
+LINE_RE = re.compile(r"^(\d+) \[(\d\d:\d\d:\d\d)\] (?:([^:]{1,20}): )?(.*)$")
 
 
 def load(ep: str):
@@ -28,7 +28,8 @@ def walk(lines: list[str], segs: list[dict]):
     for line in lines:
         m = LINE_RE.match(line)
         assert m, f"行首形状不对：{line!r}"
-        ts, who, body = m.group(1), m.group(2), m.group(3)
+        no, ts, who, body = int(m.group(1)), m.group(2), m.group(3), m.group(4)
+        assert no == len(out) + 1, "整集渲染时行号从 1 起、一行加一"
         first = si
         while body:
             t = str(segs[si]["text"]).strip()
@@ -55,9 +56,9 @@ def test_ep91_lines_are_verbatim():
     segs, spk = load("EP91")
     lines = render_lines(segs, spk).splitlines()
     rows = walk(lines, segs)
-    assert lines[0] == f"[00:00:00] 阿桥: {segs[0]['text']}"
+    assert lines[0] == f"1 [00:00:00] 阿桥: {segs[0]['text']}"
     # 说话人变化才写名字：第二行同一个人，不重复写
-    assert rows[1][1] is None and lines[1].startswith("[00:00:35] 弹幕")
+    assert rows[1][1] is None and lines[1].startswith("2 [00:00:35] 弹幕")
     assert rows[2][1] == "老周"
     assert rows[3][1] == "阿桥"
 
@@ -66,9 +67,9 @@ def test_speaker_change_inside_one_window_breaks_the_line():
     """结尾两个 30 秒窗里两人各说一句 → 四行，各自带名字。"""
     segs, spk = load("EP91")
     tail = render_lines(segs, spk, start=2490).splitlines()
-    assert [LINE_RE.match(x).group(1, 2) for x in tail] == [
-        ("00:41:30", "阿桥"), ("00:41:48", "老周"),
-        ("00:42:05", "阿桥"), ("00:42:22", "老周")]
+    assert [LINE_RE.match(x).group(1, 2, 3) for x in tail] == [
+        ("73", "00:41:30", "阿桥"), ("74", "00:41:48", "老周"),
+        ("75", "00:42:05", "阿桥"), ("76", "00:42:22", "老周")]
 
 
 def test_same_window_same_speaker_joins_with_one_space():
@@ -77,26 +78,41 @@ def test_same_window_same_speaker_joins_with_one_space():
             {"start": 10.0, "end": 19.5, "speaker": "SPEAKER_00", "text": "第二句合成文本"},
             {"start": 31.0, "end": 40.0, "speaker": "SPEAKER_00", "text": "跨窗那句"}]
     out = render_lines(segs, {"SPEAKER_00": "阿桥（主播）"})
-    assert out == ("[00:00:00] 阿桥: 第一句合成文本 第二句合成文本\n"
-                   "[00:00:31] 跨窗那句\n")
+    assert out == ("1 [00:00:00] 阿桥: 第一句合成文本 第二句合成文本\n"
+                   "2 [00:00:31] 跨窗那句\n")
 
 
 def test_unnamed_speaker_keeps_the_tag():
     """验收 10 后半：EP92 去掉点名 → 行首是 SPEAKER_00（不许编名字）。"""
     segs, _ = load("EP92")
     lines = render_lines(segs, {}).splitlines()
-    assert lines[0].startswith("[00:00:00] SPEAKER_00: ")
+    assert lines[0].startswith("1 [00:00:00] SPEAKER_00: ")
     walk(lines, segs)
 
 
-def test_slice_takes_segments_whose_start_falls_inside():
-    """L2 用的切片：只取起点落在范围内的段，段不切开。"""
+def test_slice_takes_lines_whose_start_falls_inside_and_keeps_their_numbers():
+    """L2 用的切片：只取起点落在范围内的行，行不切开；**行号照旧是全集的**——
+    L1 看到的第 35 行和 L2 在切片里看到的第 35 行是同一行。切片的第一行总是
+    写名字（哪怕整集渲染时它跟上一行同一个人）。"""
     segs, spk = load("EP91")
     lines = render_lines(segs, spk, start=1140, end=2160).splitlines()
-    assert lines[0].startswith("[00:19:00] ")
-    assert lines[-1].startswith("[00:35:24] ")
+    assert lines[0].startswith("35 [00:19:00] 阿桥: ")
+    assert lines[-1].startswith("62 [00:35:24] ")
     starts = [float(s["start"]) for s in segs if 1140 <= float(s["start"]) < 2160]
     assert len(lines) == len(starts)
+    assert render_lines(segs, spk).splitlines()[34].startswith("35 [00:19:00] ")
+
+
+def test_line_numbers_map_back_to_the_timestamp_printed_on_that_line():
+    """模型用行号指位置，代码用同一张行表把它换回时刻：换回来的就是那一行行首
+    印着的 `[HH:MM:SS]`，所以「某行属于哪一章」两头用的是同一把尺。"""
+    segs, spk = load("EP91")
+    table = build_lines(segs)
+    for raw in render_lines(segs, spk).splitlines():
+        m = LINE_RE.match(raw)
+        assert hms(line_t(table, int(m.group(1)))) == m.group(2)
+    assert line_t(table, 0) is None and line_t(table, len(table) + 1) is None
+    assert line_t(table, "7") is None and line_t(table, 7) == 210
 
 
 def test_duration_comes_from_the_last_segment():

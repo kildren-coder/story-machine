@@ -5,9 +5,10 @@
 货。层的代码不认识这三者的区别，所以「不烧额度跑一遍全流程」和「真跑」走的是
 同一条路径。
 
-信封 = `claude -p --output-format json` 的那个对象；解析产物是它 `result` 里的
-JSON（允许围栏与前言）。**找不到存档一律抛异常**：静默跳过会让一集悄悄少一层
-产物（红线 9）。
+信封 = `claude -p --output-format json` 的那个对象。层给了 schema 时 CLI 把产物
+放在 `structured_output`（已解析），`parse_envelope` 优先取它；没有就退回 `result`
+里的 JSON（允许围栏与前言——旧存档与没给 schema 的层走这条）。**找不到存档一律
+抛异常**：静默跳过会让一集悄悄少一层产物（红线 9）。
 """
 from __future__ import annotations
 
@@ -19,10 +20,14 @@ import tempfile
 from pathlib import Path
 from typing import Protocol
 
+# `--json-schema` 下模型在会话里重试 5 次仍不合 schema 时，CLI 给的信封 subtype
+SCHEMA_EXHAUSTED = "error_max_structured_output_retries"
+
 
 class Runner(Protocol):
     def run(self, scope: str, layer: str, unit: str, prompt_file: Path,
-            input_text: str, model: str, effort: str, timeout: int) -> dict:
+            input_text: str, model: str, effort: str, timeout: int,
+            schema: dict | None = None) -> dict:
         ...
 
 
@@ -31,7 +36,8 @@ class ClaudeRunner:
 
     replay = False
 
-    def run(self, scope, layer, unit, prompt_file, input_text, model, effort, timeout) -> dict:
+    def run(self, scope, layer, unit, prompt_file, input_text, model, effort, timeout,
+            schema=None) -> dict:
         exe = shutil.which("claude")
         if not exe:
             raise RuntimeError("PATH 里找不到 claude CLI")
@@ -41,19 +47,35 @@ class ClaudeRunner:
             "--model", model,
             "--effort", effort,
             "--output-format", "json",
-            # 这些层不需要任何工具。禁掉可消掉「agent 跑去读文件」整类失败模式
-            "--allowedTools", "",
+            # 这些层不需要任何工具。`--allowedTools ""` 只禁用、不移除：内置工具、
+            # MCP、skills 的定义照样进上下文，每次调用白带约 2.8 万 token（实测
+            # 8 行输入一次 $0.077，三个开关关掉后 $0.010）。L2 一集十几次调用，
+            # 这笔固定开销按次数乘
+            "--tools", "",
+            "--strict-mcp-config",
+            "--disable-slash-commands",
         ]
+        if schema is not None:
+            # 产物形状交给 CLI 把关：字段、类型、枚举不对它自己在会话里重来，
+            # 不用我们把整份输入重发一趟。代价是多一轮（按缓存价重读一遍输入）
+            argv += ["--json-schema", json.dumps(schema, ensure_ascii=False)]
         # cwd 放空目录：躲开 CLAUDE.md 自动发现，别让项目指令混进这一层的上下文
         with tempfile.TemporaryDirectory(prefix="sm-run-") as cwd:
             p = subprocess.run(argv, input=input_text, cwd=cwd, timeout=timeout,
                                capture_output=True, text=True, encoding="utf-8",
                                errors="replace")
-        if p.returncode != 0:
-            raise RuntimeError(f"claude 退出码 {p.returncode}: {(p.stderr or '')[:500]}")
         try:
             env = json.loads(p.stdout)
         except json.JSONDecodeError:
+            env = None
+        # schema 重试用尽（CLI 在会话里自己重来了 5 次还不合）：退出码 1、信封
+        # `is_error`——但这是模型答错，不是环境坏了，得走 `_failed/` 那条路留档，
+        # 不能当异常抛出去把整集掀翻
+        if isinstance(env, dict) and env.get("subtype") == SCHEMA_EXHAUSTED:
+            return env
+        if p.returncode != 0:
+            raise RuntimeError(f"claude 退出码 {p.returncode}: {(p.stderr or '')[:500]}")
+        if env is None:
             raise RuntimeError(f"claude 的 --output-format json 没给出 JSON: {p.stdout[:300]}")
         if env.get("is_error"):
             raise RuntimeError(f"claude 报错: {str(env.get('result'))[:500]}")
@@ -72,13 +94,14 @@ class _ArchiveRunner:
     def path_for(self, scope: str, layer: str, unit: str) -> Path:
         return self.root / scope / f"{layer}-{unit}.raw.json"
 
-    def run(self, scope, layer, unit, prompt_file, input_text, model, effort, timeout) -> dict:
+    def run(self, scope, layer, unit, prompt_file, input_text, model, effort, timeout,
+            schema=None) -> dict:
         p = self.path_for(scope, layer, unit)
         if not p.exists():
             raise FileNotFoundError(f"{type(self).__name__} 找不到存档响应：{p}")
         self.calls.append((scope, layer, unit))
         env = json.loads(p.read_bytes().decode("utf-8"))
-        if env.get("is_error"):
+        if env.get("is_error") and env.get("subtype") != SCHEMA_EXHAUSTED:
             raise RuntimeError(f"存档响应本身是错误信封：{str(env.get('result'))[:200]}")
         return env
 
@@ -101,6 +124,22 @@ class FakeRunner(_ArchiveRunner):
 
 
 MAX_JSON_REPAIRS = 30
+
+
+def parse_envelope(env: dict) -> dict:
+    """信封 → 产物对象。读不出来抛 ValueError（调用方当检查不过处理）。
+
+    给了 schema 的层，CLI 把过了 schema 的对象放在 `structured_output`，直接用；
+    `result` 里同一份 JSON 字符串留着给重试时附回去。没有这个键（旧存档、没给
+    schema 的层、fixture）就退回去从 `result` 的文字里挖。
+    """
+    if env.get("subtype") == SCHEMA_EXHAUSTED:
+        why = "；".join(str(e) for e in (env.get("errors") or [])) or "CLI 没说原因"
+        raise ValueError(f"模型连续几次都交不出合 schema 的产物：{why[:400]}")
+    got = env.get("structured_output")
+    if isinstance(got, dict):
+        return got
+    return extract_json(env.get("result") or "")
 
 
 def extract_json(raw: str) -> dict:

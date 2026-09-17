@@ -1,12 +1,15 @@
 {
- "id": "qa",
+ "id": "market-03",
+ "chapter": "market",
  "title": "结尾弹幕与下周预告",
+ "kind": "aside",
  "start": "00:41:30",
  "end": "00:42:40",
  "who": [
   "阿桥",
   "老周"
  ],
+ "gist": "回了几条与今天无关的弹幕，下周聊河口老照片。",
  "paras": [
   "[00:41:30] 结尾回了几条与今天话题无关的弹幕：下周聊河口老照片，<who>老周</who>准备了一九八几年的照片。"
  ],
@@ -17,10 +20,10 @@
  "provenance": {
   "derived_from": [
    "EP91.transcript.json",
-   "topics.json"
+   "chapters.json"
   ],
   "layer": "L2",
-  "unit": "qa",
+  "unit": "market",
   "engine": "claude-sonnet-5",
   "effort": "medium",
   "prompt_version": "L2@0.1",

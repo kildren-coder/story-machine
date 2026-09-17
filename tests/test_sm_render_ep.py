@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
-"""大纲渲染：`filler` 不进阅读面，但不许悄悄消失（SPEC §5.7）。
+"""L2 上线前的整理稿：章节大纲（SPEC §5.7）。
 
-答谢礼物、设备测试这种零信息的段落渲染出来只会稀释正题，所以不给 `###`；
-可模型也会误判——把正题标成 `filler` 的那一次，人在笔记上就再也看不见它。
-所以段数与合计时长必须报在块首行（红线 2 的形态：只让位，不删事）。
+章是容器，不分档：每章一行可跳播的标题，下面是 L1 写的 `gist`，全部照列。哪些
+是过场（`filler`）要等 L2 在章内细分话题时才知道——「`filler` 不渲染、段数与合计
+时长报在块首行」那条规矩跟着话题走，属于 L2 的渲染（#52）。
 """
 from __future__ import annotations
 
@@ -14,30 +14,21 @@ VER = "L1-skeleton@9.9"
 NOW = "2026-03-12T23:10:00+08:00"
 
 
-def topic(tid, kind, a, b, title=None):
-    return {"id": tid, "kind": kind, "title": title or tid,
-            "start": a, "end": b, "who": ["阿桥"], "gist": f"{tid} 的交接说明"}
+def chapter(cid, a, b, title=None):
+    return {"id": cid, "title": title or cid, "start": a, "end": b,
+            "who": ["阿桥"], "gist": f"{cid} 的交接说明"}
 
 
-def test_filler_is_not_rendered_but_is_counted():
+def test_every_chapter_gets_a_seekable_heading_and_its_gist():
     out = render_outline([
-        topic("opening", "filler", "00:00:00", "00:03:10", "开场问好与感谢礼物"),
-        topic("bridge", "talk", "00:03:10", "00:20:00", "北港大桥收费方案"),
-        topic("danmu", "aside", "00:20:00", "00:24:00", "回应弹幕：房价"),
-        topic("outro", "filler", "00:24:00", "00:26:30", "结尾预告"),
+        chapter("bridge", "00:00:00", "00:19:00", "开场、北港大桥收费方案"),
+        chapter("market", "00:19:00", "00:36:00", "河口夜市搬迁滨江路"),
     ], VER, NOW)
 
-    assert "### [00:03:10] 北港大桥收费方案" in out
-    assert "### [00:20:00] 回应弹幕：房价 · 旁白" in out
-    # 两段 filler 的标题、gist 一个字都不出现
-    for gone in ("开场问好与感谢礼物", "结尾预告", "opening 的交接说明", "outro 的交接说明"):
-        assert gone not in out, gone
+    # 时间戳写成裸 [HH:MM:SS]，跳播插件才认（ADR 0001）
+    assert "### [00:00:00] 开场、北港大桥收费方案\n\nbridge 的交接说明\n" in out
+    assert "### [00:19:00] 河口夜市搬迁滨江路\n\nmarket 的交接说明\n" in out
     assert out.count("### ") == 2
-    # 但人看得见「这里少了 2 段、共 5 分 40 秒」
-    assert "另有 2 段杂项未渲染（合计 00:05:40）" in out
-
-
-def test_no_filler_means_no_tail():
-    out = render_outline([topic("bridge", "talk", "00:00:00", "00:20:00")], VER, NOW)
-    assert "杂项未渲染" not in out
-    assert "批注请写在块外。" in out
+    assert out.startswith("## 整理稿\n\n> [!info] 本块由 L3 渲染（整理版本 L1-skeleton@9.9，"
+                          f"生成于 {NOW}）；重跑会覆盖，批注请写在块外。\n")
+    assert "旁白" not in out and "杂项未渲染" not in out

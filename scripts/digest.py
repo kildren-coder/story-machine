@@ -1,10 +1,10 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-"""digest.py — 单集入口：逐字稿 → L1 话题表 → EP 笔记里的可跳播大纲
+"""digest.py — 单集入口：逐字稿 → L1 章节表 → EP 笔记里的可跳播大纲
 
     python scripts/digest.py ep EP02 --vault D:\\obsidian-task\\任务栏\\story-machine
 
-跑完 EP 笔记的 `<!-- /speakers -->` 之后多一块 `## 整理稿`，每个话题一行
+跑完 EP 笔记的 `<!-- /speakers -->` 之后多一块 `## 整理稿`，每章一行
 `### [HH:MM:SS] 标题`，点时间戳跳播（ADR 0001）；frontmatter 的 `整理:` 置
 `done`。产物齐全就跳过，`--force` 才覆盖（SPEC §4.1）。
 
@@ -87,20 +87,20 @@ def cmd_ep(args) -> int:
         log(f"⚠ 还有没点名的说话人 {unnamed}——行首保留 SPEAKER_XX 原样，"
             f"先去笔记里点名再重跑效果更好")
 
-    topics_path = paths.digest(ep) / "topics.json"
-    if topics_path.exists() and not args.force:
+    chapters_path = paths.digest(ep) / "chapters.json"
+    if chapters_path.exists() and not args.force:
         # 产物坏了就停在这儿报出来：悄悄重跑会把人正要看的证据覆盖掉
         try:
-            obj = json.loads(topics_path.read_bytes().decode("utf-8"))
+            obj = json.loads(chapters_path.read_bytes().decode("utf-8"))
         except (ValueError, UnicodeDecodeError) as e:
-            log(f"✖ {paths.rel(topics_path)} 不是合法 JSON（{e}）——看一眼再删，"
+            log(f"✖ {paths.rel(chapters_path)} 不是合法 JSON（{e}）——看一眼再删，"
                 f"或者直接 --force 重跑")
             return 2
-        if not (obj.get("topics") or []):
-            log(f"✖ {paths.rel(topics_path)} 里没有话题——看一眼再删，"
+        if not (obj.get("chapters") or []):
+            log(f"✖ {paths.rel(chapters_path)} 里没有章节——看一眼再删，"
                 f"或者直接 --force 重跑")
             return 2
-        log(f"L1 产物已在（{paths.rel(topics_path)}），跳过调用——要重跑加 --force")
+        log(f"L1 产物已在（{paths.rel(chapters_path)}），跳过调用——要重跑加 --force")
     else:
         runner = make_runner(args.runner)
         log(f"L1 骨架：整集一次调用（{args.model} / effort {args.effort}，"
@@ -124,23 +124,23 @@ def cmd_ep(args) -> int:
             for e in errors[:5]:
                 log(f"    · {e}")
             return 1
-        log(f"L1 通过：{len(obj.get('topics') or [])} 个话题 → {paths.rel(topics_path)}")
+        log(f"L1 通过：{len(obj.get('chapters') or [])} 章 → {paths.rel(chapters_path)}")
 
     prov = obj.get("provenance") or {}
     version = prov.get("prompt_version") or prompt["version"]
-    # 块首行那个时间说的是「这份话题表什么时候生成的」，取产物自己记的那个：跳过
+    # 块首行那个时间说的是「这份章节表什么时候生成的」，取产物自己记的那个：跳过
     # L1 重渲染时用当下，笔记每跑一次就变一次（Obsidian 记一条新版本、同步重传）
-    block = render_outline(obj.get("topics") or [], version,
+    block = render_outline(obj.get("chapters") or [], version,
                            prov.get("generated_at") or now)
     missed = write_into_note(note, block, "done", version)
     if missed:
         log(f"⚠ 笔记没有 frontmatter，{'、'.join(missed)} 没写进去")
-    log(f"话题大纲已写进 {paths.rel(note)}（整理: done，整理版本 {version}）")
+    log(f"章节大纲已写进 {paths.rel(note)}（整理: done，整理版本 {version}）")
     return 0
 
 
 def main(argv=None) -> int:
-    ap = argparse.ArgumentParser(description="单集整理：L1 话题表 → EP 笔记大纲")
+    ap = argparse.ArgumentParser(description="单集整理：L1 章节表 → EP 笔记大纲")
     sub = ap.add_subparsers(dest="cmd", required=True)
     one = sub.add_parser("ep", help="跑一集")
     one.add_argument("ep", help="EP02")

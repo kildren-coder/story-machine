@@ -1,15 +1,16 @@
 {
- "id": "opening",
+ "id": "bridge-01",
+ "chapter": "bridge",
  "title": "开场与设备测试",
+ "kind": "filler",
  "start": "00:00:00",
  "end": "00:03:30",
  "who": [
   "阿桥",
   "老周"
  ],
- "paras": [
-  "[00:00:00] 开场：<who>阿桥</who>换了新麦克风请观众听回音，<who>老周</who>到场问好，预告今天聊北港大桥收费方案和河口夜市搬迁两件事。"
- ],
+ "gist": "换了新麦克风、老周问好、预告今天聊大桥收费和夜市搬迁、报了直播间人数。",
+ "paras": [],
  "quotes": [],
  "claims": [],
  "channels": [],
@@ -17,10 +18,10 @@
  "provenance": {
   "derived_from": [
    "EP91.transcript.json",
-   "topics.json"
+   "chapters.json"
   ],
   "layer": "L2",
-  "unit": "opening",
+  "unit": "bridge",
   "engine": "claude-sonnet-5",
   "effort": "medium",
   "prompt_version": "L2@0.1",

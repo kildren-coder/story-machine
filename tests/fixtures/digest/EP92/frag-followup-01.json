@@ -1,11 +1,14 @@
 {
- "id": "opening",
+ "id": "followup-01",
+ "chapter": "followup",
  "title": "加更说明",
+ "kind": "aside",
  "start": "00:00:00",
  "end": "00:01:00",
  "who": [
   "阿桥"
  ],
+ "gist": "下播后收到跟大桥收费有关的材料，加更十几分钟。",
  "paras": [
   "[00:00:00] <who>阿桥</who>说下播后有朋友发来跟大桥收费有关的材料，加更十几分钟。"
  ],
@@ -16,10 +19,10 @@
  "provenance": {
   "derived_from": [
    "EP92.transcript.json",
-   "topics.json"
+   "chapters.json"
   ],
   "layer": "L2",
-  "unit": "opening",
+  "unit": "followup",
   "engine": "claude-sonnet-5",
   "effort": "medium",
   "prompt_version": "L2@0.1",

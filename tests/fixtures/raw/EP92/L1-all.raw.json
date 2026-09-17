@@ -4,9 +4,9 @@
  "is_error": false,
  "duration_ms": 41000,
  "duration_api_ms": 39000,
- "num_turns": 1,
+ "num_turns": 2,
  "stop_reason": "end_turn",
- "result": "```json\n{\n  \"topics\": [\n    {\n      \"id\": \"opening\",\n      \"title\": \"加更说明\",\n      \"kind\": \"aside\",\n      \"start\": \"00:00:00\",\n      \"who\": [\n        \"阿桥\"\n      ],\n      \"gist\": \"下播后收到材料，加更十几分钟\"\n    },\n    {\n      \"id\": \"bridge-followup\",\n      \"title\": \"北港大桥货车费率：一张征求意见函的照片\",\n      \"kind\": \"talk\",\n      \"start\": \"00:01:00\",\n      \"who\": [\n        \"阿桥\"\n      ],\n      \"gist\": \"按轴计费的征求意见版费率、货运公司的账、更正每月前十次\"\n    },\n    {\n      \"id\": \"outro\",\n      \"title\": \"下周预告\",\n      \"kind\": \"aside\",\n      \"start\": \"00:13:00\",\n      \"who\": [\n        \"阿桥\"\n      ],\n      \"gist\": \"老照片那期周四八点\"\n    }\n  ]\n}\n```",
+ "result": "{\"chapters\": [{\"id\": \"followup\", \"title\": \"加更：北港大桥货车费率的征求意见函\", \"line\": 1, \"gist\": \"下播后朋友发来货运公司收到的征求意见函照片：货车按轴计费的费率、公司的过桥账、本地企业拟给折扣、函比通报晚五天；更正直播里说的每月前二十次免费，应为前十次。最后一句下周预告。\"}]}",
  "session_id": "synthetic-fixture-session",
  "total_cost_usd": 0.009,
  "usage": {
@@ -28,5 +28,15 @@
   }
  },
  "permission_denials": [],
- "uuid": "00000000-0000-4000-8000-000000000091"
+ "uuid": "00000000-0000-4000-8000-000000000091",
+ "structured_output": {
+  "chapters": [
+   {
+    "id": "followup",
+    "title": "加更：北港大桥货车费率的征求意见函",
+    "line": 1,
+    "gist": "下播后朋友发来货运公司收到的征求意见函照片：货车按轴计费的费率、公司的过桥账、本地企业拟给折扣、函比通报晚五天；更正直播里说的每月前二十次免费，应为前十次。最后一句下周预告。"
+   }
+  ]
+ }
 }

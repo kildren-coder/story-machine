@@ -1,0 +1,26 @@
+{
+ "ep": "EP92",
+ "chapters": [
+  {
+   "id": "followup",
+   "title": "加更：北港大桥货车费率的征求意见函",
+   "start": "00:00:00",
+   "end": "00:14:00",
+   "who": [
+    "阿桥"
+   ],
+   "gist": "下播后朋友发来货运公司收到的征求意见函照片：货车按轴计费的费率、公司的过桥账、本地企业拟给折扣、函比通报晚五天；更正直播里说的每月前二十次免费，应为前十次。最后一句下周预告。"
+  }
+ ],
+ "provenance": {
+  "derived_from": [
+   "EP92.transcript.json"
+  ],
+  "layer": "L1",
+  "unit": "all",
+  "engine": "claude-sonnet-5",
+  "effort": "low",
+  "prompt_version": "L1@0.1",
+  "generated_at": "2026-03-12T23:10:00+08:00"
+ }
+}

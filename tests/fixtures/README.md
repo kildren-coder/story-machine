@@ -14,16 +14,28 @@
 | `vault/10-Episodes/EP91 ….md` | 没有 `整理:` 字段（仿现网旧笔记），带 `## 断言` `## 待办` 旧节 | §6.1 |
 | `vault/10-Episodes/EP92 ….md` | 有 `整理: pending` | §6.1 |
 | `vault/30-Events/2026-northbridge-toll.md` | first_seen 2026-03-05，「我的判断」有人写的内容 | §5.8 |
-| `digest/EP91/`、`digest/EP92/` | L1 话题表与 L2 片段的**解析后产物**形状（带 `provenance`） | §5.3、§5.4、§9 |
-| `digest/2026-03-12/events.json` | L4 事件清单：跨 EP 合并、沿用已有事件 id | §5.5 |
-| `l3/frag-night-market.bad.json` | 故意违规的片段：闸门 1（引文改写）、2（时间戳越界）、3（丢 hedge）、5（asr.heard 不存在） | §4 L3 |
-| `raw/<EP 或日期>/<层>-<单元>.raw.json` | 假 `claude -p --output-format json` 信封，`result` 是围栏 JSON | §4.1 |
-| `raw-bad/…` | 坏响应：L1 覆盖空洞 + 缺 kind；L2 闸门违规；L2 纯散文无 JSON；L4 引用不存在话题 + aside 成事件 | §4.1 |
+| `digest/EP91/`、`digest/EP92/` | L1 章节表 `chapters.json`、L2 片段 `frag-<话题>.json` 与话题表 `topics.json` 的**解析后产物**形状（带 `provenance`） | §5.3、§5.4、§9 |
+| `digest/2026-03-12/events.json` | L4 事件清单：跨 EP 合并、同一 EP 内被打断的同一事件合并、沿用已有事件 id | §5.5 |
+| `l3/frag-market-01.bad.json` | 故意违规的片段：闸门 1（引文改写）、2（时间戳越界）、3（丢 hedge）、5（asr.heard 不存在） | §4 L3 |
+| `raw/<EP 或日期>/<层>-<单元>.raw.json` | 假 `claude -p --output-format json` 信封；L1 / L2 带 `structured_output`（`--json-schema` 的形状），L4 的 `result` 是围栏 JSON | §4.1 |
+| `raw-bad/…` | 坏响应（只有 `result`）：L1 行号不在这一集里 + 缺 title；L2 闸门违规；L2 纯散文无 JSON；L4 引用不存在话题 + aside 成事件 | §4.1 |
 
-`raw/` 的键与 `_pairs/` 的文件名一致：`_pairs/EP91/L2-bridge-toll.in.md` ↔ `raw/EP91/L2-bridge-toll.raw.json`。
-假 runner 按这个键取响应，缺键即报错（不是静默跳过）。
+`raw/` 的键与 `_pairs/` 的文件名一致：`_pairs/EP91/L2-bridge.in.md` ↔ `raw/EP91/L2-bridge.raw.json`。
+L2 的单元是**章节**：一章一次调用，响应里是这一章的全部话题。假 runner 按这个键取响应，缺键即报错（不是静默跳过）。
 
-## 段号速查（EP91）
+## 章节与话题速查
 
-对白表 1-based 段号 → 时间戳：第 7 段 00:03:30，第 11 段 00:05:43，第 21 段 00:11:15（ASR 生音所在段），
-第 35 段 00:19:00，第 63 段 00:36:00，第 73 段 00:41:30。
+| 集 | 章节（L1） | 章内话题（L2，`id` 由程序按 `<章节>-NN` 编） |
+|---|---|---|
+| EP91 | `bridge` 00:00:00–00:19:00 | `bridge-01` 开场（`filler`）、`bridge-02` 大桥收费（`talk`） |
+| EP91 | `market` 00:19:00–00:42:40 | `market-01` 夜市搬迁（`talk`）、`market-02` 回到大桥（`talk`）、`market-03` 结尾弹幕（`aside`） |
+| EP92 | `followup` 00:00:00–00:14:00 | `followup-01` 加更说明（`aside`）、`followup-02` 货车费率（`talk`）、`followup-03` 下周预告（`filler`） |
+
+EP91 的 L1 响应里模型切了三章（`bridge` / `market` / `bridge-again`），第三章只有 6 分 40 秒，
+程序把它并进 `market`（标题用顿号接、gist 顺序接），所以章节表里是两章、L2 调两次。
+大桥那件事在 EP91 里被夜市打断，落在 `bridge-02` 与 `market-02` 两个话题里，L4 把它们归回同一个事件。
+
+## 行号速查（EP91）
+
+两集的段都比 30 秒长，所以 §5.2 文本的第 n 行就是对白表的第 n 段。行号 → 时间戳：第 7 行 00:03:30，
+第 11 行 00:05:43，第 21 行 00:11:15（ASR 生音所在行），第 35 行 00:19:00，第 63 行 00:36:00，第 73 行 00:41:30。
