@@ -23,13 +23,19 @@ SEAM_S = 5            # 覆盖检查容忍的缝：模型按行首时间戳取�
 TOPIC_KEYS = ("id", "title", "kind", "ranges", "who", "gist")
 
 
-def head_line(ep: str, dur: int, names: list[str]) -> str:
-    return (f"episode: {ep} · 时长 {hms(dur)} · "
-            f"说话人 {'、'.join(names) if names else '未点名'}")
+def head_block(ep: str, dur: int, names: list[str]) -> str:
+    """三行头，一行一个键。
+
+    挤成一行（`episode: EP02 · 时长 … · 说话人 …`）时「照抄 episode」有歧义，
+    模型会把整行抄进 `ep`，整集打回重跑——EP02 上连挂两次。
+    """
+    return (f"episode: {ep}\n"
+            f"时长: {hms(dur)}\n"
+            f"说话人: {'、'.join(names) if names else '未点名'}")
 
 
 def build_input(ep: str, segments: list[dict], speakers: dict) -> str:
-    """一行头 + 整集 §5.2 文本。头之后一行 `---`，正文就是逐字稿，别的都没有。"""
+    """三行头 + 整集 §5.2 文本。头之后一行 `---`，正文就是逐字稿，别的都没有。"""
     order: list[str] = []
     for s in segments:
         tag = s.get("speaker") or ""
@@ -37,7 +43,7 @@ def build_input(ep: str, segments: list[dict], speakers: dict) -> str:
             order.append(tag)
     names = [speakers.get(tag, tag) for tag in order]
     body = render_lines(segments, speakers)
-    return head_line(ep, duration_s(segments), names) + "\n---\n" + body
+    return head_block(ep, duration_s(segments), names) + "\n---\n" + body
 
 
 def check_topics(obj, dur: int, ep: str | None = None) -> list[str]:

@@ -9,7 +9,7 @@ from __future__ import annotations
 import re
 
 from conftest import REPO
-from sm.l1 import check_topics
+from sm.l1 import build_input, check_topics
 from sm.prov import read_prompt
 
 PROMPT = REPO / "prompts" / "L1-skeleton.md"
@@ -111,3 +111,19 @@ def test_title_that_would_break_the_marker_block():
     obj = topics([["00:00:00", "00:10:00"]])
     obj["topics"][0]["gist"] = "收尾 <!-- /digest -->"
     assert "撑破标记块" in errs(obj)
+
+
+def test_head_puts_only_the_ep_id_on_the_episode_line():
+    """头一行一个键：`episode:` 那行只有集号。
+
+    挤成一行（`episode: EP02 · 时长 … · 说话人 …`）的时候，模型把整行抄进了
+    `ep`，EP02 上连挂两次、两次都重发了整集逐字稿。歧义要消在输入里，不是靠
+    prompt 多写一句话求它别抄错。
+    """
+    segs = [{"start": 0.0, "end": 61.0, "speaker": "SPEAKER_00", "text": "开场"}]
+    lines = build_input("EP02", segs, {"SPEAKER_00": "瓜哥"}).splitlines()
+    assert lines[0] == "episode: EP02"
+    assert lines[1].startswith("时长: ")
+    assert lines[2].startswith("说话人: ")
+    # 集号那行不许挂别的东西——挂了就又有歧义了
+    assert "·" not in lines[0] and "时长" not in lines[0]
