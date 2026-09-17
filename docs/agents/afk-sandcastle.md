@@ -230,18 +230,21 @@ npm run afk '--' --quota         # 只打印当前额度判定，不跑活
 沙箱内实测过、与宿主机行为不同、会让 agent 掉进兔子洞的环境特性。implement
 prompt 只放一行指向这里的指针，细节全部落在这节；再踩到新坑就往这里追加。
 
-- **没有 vault。** `scripts/stage12.py` 之类的默认 `--vault` 指向
-  `D:\obsidian-task\...`，沙箱里不存在。测试一律显式传临时目录；不要去找、不要
-  去造 vault 目录结构以外的东西。
+- **没有 vault。** 宿主机上的 vault 在 `D:\obsidian-task\...`，沙箱里不存在，
+  `scripts/digest.py` 的 `--vault` 也因此没有默认值。测试一律先把
+  `tests/fixtures/vault/` 拷进 `tmp_path` 再显式传进去（`tests/conftest.py` 的
+  `vault` fixture 就干这件事），**不要写回 fixture**；不要去找、不要去造 vault
+  目录结构以外的东西。
 - **没有 PowerShell。** `scripts/*.ps1`（worker、setup）只能静态改，改了在 QA
   文档里写人怎么验。
 - **不要调 `claude -p`。** 沙箱里的 token 就是本订阅的额度；而且没有真实逐字稿，
   跑出来的东西证明不了层的效果。
 - **容器用户 UID 必须是 1000。** sandcastle 在 Windows 宿主上拿不到 uid，固定
   以 `--user 1000` 起容器；Dockerfile 里 `useradd -u 1000` 已钉死，别改。
-- **中文输出与编码。** 测试脚本自己 `reconfigure(encoding="utf-8")`，沙箱内
-  Python 默认 UTF-8，宿主机 Windows 上不一定——新写的测试照 `scripts/test_stage12.py`
-  开头那几行处理 stdout。
+- **中文输出与编码。** 脚本自己 `reconfigure(encoding="utf-8")`，沙箱内 Python
+  默认 UTF-8，宿主机 Windows 上不一定——新写的入口照 `scripts/digest.py` 开头那
+  几行处理 stdout（worker 用 `& $LocalPy @argv 2>&1 | ForEach-Object` 捞日志，
+  stdout 不是 UTF-8 逐行就会变乱码）。
 
 ## 沙箱镜像维护
 
