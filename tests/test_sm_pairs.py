@@ -10,7 +10,7 @@ import json
 
 import pytest
 from conftest import RAW, RAW_BAD
-from sm.pairs import call_layer, retry_input
+from sm.pairs import MAX_PREV_CHARS, call_layer, retry_input
 from sm.paths import VaultPaths
 from sm.prov import PROV_KEYS, engine_of, provenance
 from sm.runner import FakeRunner, ReplayRunner, extract_json
@@ -147,9 +147,28 @@ def test_retry_carries_the_previous_errors(tmp_path):
     first, second = runner.inputs
     assert first == "逐字稿正文"                       # 第一趟一个字不多
     assert second.startswith("逐字稿正文")              # 原材料照旧在最前面
-    assert "上一次的输出没通过检查" in second
+    assert "上面这份输出没通过检查" in second
     assert "顶层 `ep` = '坏的'，应该是 'EP91'" in second
     assert "范围起点不早于终点：03:09:00-03:09:00" in second
+
+
+def test_retry_carries_the_previous_output_too(tmp_path):
+    """光说「错了」不够，要把它自己那份答卷附上。
+
+    不附的话「其余照常」是空话——模型手上只有原材料，只能从头重写，改对这条
+    碰坏那条。合成集活体实测：四条错误它改对三条、剩一条原样，进了 `_failed/`。
+    """
+    paths = VaultPaths(tmp_path)
+    runner = ScriptedRunner(['{"ep": "坏的", "topics": ["原样留着的那部分"]}',
+                             '{"ep": "EP91"}'])
+    call_layer(paths, runner, "EP91", "L1", "all", "p.md", "逐字稿正文",
+               lambda o: [] if o.get("ep") == "EP91" else ["不过"], log=lambda m: None)
+
+    second = runner.inputs[1]
+    assert "=== 你上一次的输出 ===" in second
+    assert '"原样留着的那部分"' in second               # 一字不改地附上
+    assert second.index("原样留着的那部分") < second.index("不过")   # 先答卷后批注
+    assert "没被点到的地方原样保留" in second
 
 
 def test_in_md_is_the_input_that_actually_produced_the_archived_response(tmp_path):
@@ -161,7 +180,7 @@ def test_in_md_is_the_input_that_actually_produced_the_archived_response(tmp_pat
 
     in_md = (paths.pairs("EP91") / "L1-all.in.md").read_bytes().decode("utf-8")
     assert in_md == runner.inputs[-1]
-    assert "上一次的输出没通过检查" in in_md
+    assert "上面这份输出没通过检查" in in_md
 
 
 def test_retry_block_truncates_a_flood_of_errors(tmp_path):
@@ -172,3 +191,14 @@ def test_retry_block_truncates_a_flood_of_errors(tmp_path):
     assert "第11条错误" not in text
     assert "还有 90 条同类问题" in text
     assert text.startswith("正文")
+
+
+def test_an_absurdly_long_previous_output_is_dropped(tmp_path):
+    """上一次的输出长到离谱就不带——错误照带，别把这一趟也撑爆。"""
+    huge = "x" * (MAX_PREV_CHARS + 1)
+    text = retry_input("正文", ["不过"], huge)
+    assert "=== 你上一次的输出 ===" not in text
+    assert "不过" in text and text.startswith("正文")
+
+    ok = "y" * MAX_PREV_CHARS
+    assert "=== 你上一次的输出 ===" in retry_input("正文", ["不过"], ok)
