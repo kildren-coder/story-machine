@@ -39,7 +39,8 @@ def test_redo_maps_to_force():
 
 
 def test_done_message_mentions_the_visible_change():
-    assert "话题大纲已写进 EP 笔记" in extract_body()
+    """L2 上线后笔记里那块是整理稿，不再是大纲——完成提示得说人真能看到的东西。"""
+    assert "整理稿已写进 EP 笔记" in extract_body()
 
 
 def test_stage12_is_gone():

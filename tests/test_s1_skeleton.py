@@ -1,15 +1,20 @@
 # -*- coding: utf-8 -*-
-"""里程碑 1 行走骨架的端到端用例：逐字稿 → L1 → 章节表 → EP 笔记大纲。
+"""里程碑 1 行走骨架的端到端用例：逐字稿 → L1 → 章节表 → 笔记的标记块与状态。
 
-对应 issue #51 验收 1–5、11。全部在 fixture vault 的临时副本上跑，假 runner 读
-`tests/fixtures/raw/`，一次真实调用都不发。
+对应 issue #51 验收 1–5、11。L1 之后接的是 L2（#52）：章节表照旧是 L1 的产物，
+但落进笔记的是**整理稿**，`整理版本:` 也就取 L2 的 prompt 版本；块内长什么样归
+`tests/test_s2_topics.py` 管，这里只盯 L1 的产物、块的位置与块外的字节。
+
+全部在 fixture vault 的临时副本上跑，假 runner 读 `tests/fixtures/raw/`，一次真实
+调用都不发。
 """
 from __future__ import annotations
 
 import json
 import re
 
-from conftest import FIX, NOW, RAW, RAW_BAD, VERSION, fixture_note_text, note_path, note_text, run_ep
+from conftest import (FIX, L2_VERSION, NOW, RAW, RAW_BAD, fixture_note_text, note_path,
+                      note_text, run_ep)
 from sm.note import read_frontmatter
 from sm.prov import PROV_KEYS
 from sm.runner import FakeRunner
@@ -37,6 +42,7 @@ def test_ep91_end_to_end(vault):
     """验收 1：三份留档 + 产物 + 笔记块 + frontmatter + 块外字节不动。"""
     runner = FakeRunner(RAW)
     assert run_ep(vault, "EP91", runner) == 0
+    assert len(runner.calls) == 3                      # L1 一次 + 两章各一次
 
     assert (vault / "_pairs" / "EP91" / "L1-all.in.md").exists()
     assert (vault / "_pairs" / "EP91" / "L1-all.raw.json").exists()
@@ -49,13 +55,10 @@ def test_ep91_end_to_end(vault):
     # 块紧跟 <!-- /speakers -->：两者之间除了空白什么都没有
     assert re.search(r"<!-- /speakers -->\s*<!-- digest:auto -->", text)
     block = block_of(text)
-    heads = HEAD_RE.findall(block)
-    # 模型切了三章，第三章只有 6 分 40 秒：程序把它并进了前一章（标题用顿号接）
-    assert len(heads) == 2
-    assert [h[0] for h in heads] == ["00:00:00", "00:19:00"]
-    assert [h[0] for h in heads] == [c["start"] for c in want["chapters"]]
-    assert [h[1] for h in heads] == ["开场、北港大桥收费方案",
-                                     "河口夜市搬迁滨江路、回到大桥：货车与浮桥、结尾弹幕"]
+    # 模型切了三章，第三章只有 6 分 40 秒：程序把它并进了前一章（标题用顿号接）；
+    # 块里出的是这两章里的话题（`filler` 不渲染），不是章节大纲
+    assert len(HEAD_RE.findall(block)) == 4
+    assert "开场、北港大桥收费方案" not in block
     # 行号换成了时刻、终点接上了、说话人是代码从行表里填的——模型一样都没写
     assert [(c["id"], c["start"], c["end"]) for c in got["chapters"]] == [
         ("bridge", "00:00:00", "00:19:00"), ("market", "00:19:00", "00:42:40")]
@@ -63,10 +66,10 @@ def test_ep91_end_to_end(vault):
 
     fm = read_frontmatter(text)
     assert fm["整理"] == "done"
-    assert fm["整理版本"] == VERSION
+    assert fm["整理版本"] == L2_VERSION            # 笔记里那块是 L2 的产物
     # 红线 7 类比：把块和这两行去掉，人写的每一节逐字节回到原样
     stripped = without_block(text) \
-        .replace("整理: done\n", "", 1).replace(f"整理版本: {VERSION}\n", "", 1)
+        .replace("整理: done\n", "", 1).replace(f"整理版本: {L2_VERSION}\n", "", 1)
     assert stripped == fixture_note_text("EP91")
 
 
@@ -81,7 +84,7 @@ def test_ep92_pending_flips_in_place(vault):
     i = lines_before.index("整理: pending")
     assert lines_after[i] == "整理: done"
     restored = without_block(after) \
-        .replace(f"整理版本: {VERSION}\n", "", 1).replace("整理: done\n", "整理: pending\n", 1)
+        .replace(f"整理版本: {L2_VERSION}\n", "", 1).replace("整理: done\n", "整理: pending\n", 1)
     assert restored == before
 
 
@@ -89,15 +92,15 @@ def test_rerun_skips_l1_and_force_recalls(vault):
     """验收 3：产物在就不调 runner，笔记逐字节不变；--force 再调一次。"""
     runner = FakeRunner(RAW)
     assert run_ep(vault, "EP91", runner) == 0
-    assert len(runner.calls) == 1
+    assert len(runner.calls) == 3                      # L1 + 两章
     first = note_text(vault, "EP91")
 
     assert run_ep(vault, "EP91", runner) == 0
-    assert len(runner.calls) == 1                      # 第二趟一次都没调
+    assert len(runner.calls) == 3                      # 第二趟一次都没调
     assert note_text(vault, "EP91") == first
 
     assert run_ep(vault, "EP91", runner, "--force") == 0
-    assert len(runner.calls) == 2
+    assert len(runner.calls) == 6                      # L1 与两章都重跑
     assert note_text(vault, "EP91") == first           # 同一份响应 + 固定时钟
 
 
@@ -117,9 +120,9 @@ def test_rerun_keeps_the_generated_at_from_the_product(vault):
         (vault / "_digest" / "EP91" / "chapters.json").read_bytes().decode("utf-8"))
     assert chapters["provenance"]["generated_at"] == NOW
 
-    # 半天之后再跑：L1 跳过，笔记必须逐字节不变
+    # 半天之后再跑：L1 与 L2 都跳过，笔记必须逐字节不变
     assert run_ep(vault, "EP91", runner, now="2026-03-13T11:30:00+08:00") == 0
-    assert len(runner.calls) == 1
+    assert len(runner.calls) == 3
     assert note_text(vault, "EP91") == first
 
 
@@ -177,7 +180,7 @@ def test_block_appended_when_no_anchor(vault):
     assert text.rstrip("\n").endswith("<!-- /digest -->")
     assert "这一行是人写的，机器不许碰。" in text
     stripped = without_block(text) \
-        .replace("整理: done\n", "", 1).replace(f"整理版本: {VERSION}\n", "", 1)
+        .replace("整理: done\n", "", 1).replace(f"整理版本: {L2_VERSION}\n", "", 1)
     assert stripped == minimal
 
 
@@ -187,7 +190,7 @@ def test_stdout_says_each_step_and_no_content(vault, capsys):
     out = capsys.readouterr().out
     assert "L1 骨架" in out and "L1 通过：2 章" in out
     assert "模型切了 3 章，其中 1 章不到 8 分钟，并进了相邻的章" in out
-    assert "整理: done" in out
+    assert "L2 逐章节整理：2 章" in out and "整理: done" in out
     assert "北港大桥收费方案" not in out
     assert "河口晚报今早报道" not in out
     assert NOW in note_text(vault, "EP91")              # 块首行写明生成时间
@@ -204,7 +207,7 @@ def test_broken_chapters_json_stops_instead_of_overwriting(vault):
     assert broken.read_bytes().decode("utf-8") == "{截断了"
     # --force 才允许覆盖
     assert run_ep(vault, "EP91", runner, "--force") == 0
-    assert len(runner.calls) == 1
+    assert len(runner.calls) == 3
 
 
 def test_crlf_note_keeps_crlf(vault):
@@ -220,5 +223,5 @@ def test_crlf_note_keeps_crlf(vault):
     assert block
     stripped = out[:block.start()] + out[block.end():]
     stripped = stripped.replace("整理: done\r\n".encode(), b"", 1) \
-                       .replace(f"整理版本: {VERSION}\r\n".encode(), b"", 1)
+                       .replace(f"整理版本: {L2_VERSION}\r\n".encode(), b"", 1)
     assert stripped == crlf
