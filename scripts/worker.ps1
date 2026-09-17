@@ -6,7 +6,7 @@
 #   .\scripts\worker.ps1 -Retry EP02     失败后接着**摔倒的那一步**重跑（常用）
 #   .\scripts\worker.ps1 -Reset EP02     打回「待下载」整条重来（少用，会白扔转写）
 #   .\scripts\worker.ps1 -Name EP02      只跑这一集的点名回填（不碰队列）
-#   .\scripts\worker.ps1 -Extract EP02   只跑这一集的阶段 1–2 抽取（+ -Redo 覆盖已有草稿）
+#   .\scripts\worker.ps1 -Extract EP02   只跑这一集的整理（+ -Redo 覆盖已有产物）
 #
 # 设计：**队列笔记是状态机，本脚本是执行器。**
 #   状态全部落在 `_pipeline/队列.md` 的括号式 inline field 里，所以
@@ -24,8 +24,8 @@ param(
     [string]$Reset,
     [string]$Retry,        # 打回**失败的那一步**重跑（对比 -Reset：那是整条重来）
     [string]$Name,         # 只跑某一集的点名回填，不碰队列
-    [string]$Extract,      # 只跑某一集的阶段 1–2 抽取（转交 scripts\stage12.py）
-    [switch]$Redo          # 配 -Extract：草稿已存在也重跑（会覆盖）
+    [string]$Extract,      # 只跑某一集的整理（转交 scripts\digest.py）
+    [switch]$Redo          # 配 -Extract：产物已在也重跑（会覆盖）
 )
 
 $ErrorActionPreference = 'Stop'
@@ -47,8 +47,8 @@ $RemoteDiarScript = "C:\asr\smdiar.py"
 # 声纹比对在本机跑：质心随 EP{n}.diar.json 回来了，只要 numpy
 $LocalPy = "python"
 $SpeakersScript = Join-Path (Split-Path $PSScriptRoot -Parent) "pc\speakers.py"
-# 阶段 1–2 也在本机跑：它调的是无头 Claude Code，走的是笔记本上的订阅额度
-$Stage12Script = Join-Path $PSScriptRoot "stage12.py"
+# 整理（L1 起）也在本机跑：它调的是无头 Claude Code，走的是笔记本上的订阅额度
+$DigestScript = Join-Path $PSScriptRoot "digest.py"
 # 取回走 sftp（要续传，见 Copy-FromPc）。用绝对路径起进程，省得依赖 PATH。
 $SftpExe = (Get-Command sftp -ErrorAction SilentlyContinue).Source
 if (-not $SftpExe) { $SftpExe = 'C:\Windows\System32\OpenSSH\sftp.exe' }
@@ -909,20 +909,20 @@ function Initialize-Queue {
 }
 
 function Invoke-Extract {
-    <# 阶段 1–2：转交 scripts\stage12.py。worker 在这里只做三件事——检查前置、
-       起进程、把 python 的日志原样喷给插件的日志面板。切块、调模型、闸门、
-       写草稿全在 python 那边，别在 PowerShell 里重写一遍。
+    <# 整理：转交 scripts\digest.py。worker 在这里只做三件事——检查前置、起进程、
+       把 python 的日志原样喷给插件的日志面板。切片、调模型、闸门、写笔记全在
+       python 那边，别在 PowerShell 里重写一遍。
 
-       为什么不挂进队列状态机：抽取要跑几分钟且烧订阅额度，得由人按按钮触发；
+       为什么不挂进队列状态机：整理要跑几分钟且烧订阅额度，得由人按按钮触发；
        队列那套是「粘了链接就该自动跑完」的东西，两者节奏不同。#>
     param([string]$Ep, [switch]$Again)
-    if (-not (Test-Path $Stage12Script)) { throw "找不到抽取脚本：$Stage12Script" }
+    if (-not (Test-Path $DigestScript)) { throw "找不到整理脚本：$DigestScript" }
     $tr = Join-Path $AssetsDir "$Ep.transcript.json"
     if (-not (Test-Path $tr)) { throw "$Ep 还没有逐字稿（$tr）——阶段 0 跑完了吗？" }
 
-    $argv = @($Stage12Script, '--ep', $Ep, '--vault', $Vault)
+    $argv = @($DigestScript, 'ep', $Ep, '--vault', $Vault)
     if ($Again) { $argv += '--force' }
-    Write-Log "$Ep 阶段 1–2 抽取：无头 Claude Code，一块要跑几分钟，别关窗口" Cyan
+    Write-Log "$Ep 整理：无头 Claude Code，整集一次调用要跑几分钟，别关窗口" Cyan
     $prevEap = $ErrorActionPreference
     $ErrorActionPreference = 'Continue'
     try {
@@ -930,8 +930,9 @@ function Invoke-Extract {
         $rc = $LASTEXITCODE
     }
     finally { $ErrorActionPreference = $prevEap }
-    if ($rc -ne 0) { throw "$Ep 抽取失败（退出码 $rc），详情看上面的日志" }
-    Write-Log "$Ep 抽取完成——草稿在 _review/，下一步是阶段 3 人工审核" Green
+    # 退出码：1 = 某层不过，已落 _failed/ 且笔记打了 整理: failed；2 = 输入缺失
+    if ($rc -ne 0) { throw "$Ep 整理失败（退出码 $rc），详情看上面的日志" }
+    Write-Log "$Ep 整理完成——话题大纲已写进 EP 笔记，点时间戳可跳播" Green
 }
 
 $script:NamedAt = @{}
