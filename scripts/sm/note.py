@@ -80,18 +80,16 @@ def set_frontmatter(text: str, updates: dict) -> tuple[str, list[str]]:
     if not m:
         return text, list(todo)
 
-    block = m.group(1)
+    # 行尾按 frontmatter 自己的（不看正文）。注意最后一行的行尾归在 group(1) 之外
+    # ——所以先把每行的 \r 剥掉，改完再用 nl 重接，别在中间留一个裸 \n
     nl = "\r\n" if "\r\n" in m.group(0) else "\n"
-    lines = block.split("\n")
+    lines = [x[:-1] if x.endswith("\r") else x for x in m.group(1).split("\n")]
     for key, value in list(todo.items()):
         for i, line in enumerate(lines):
-            if re.match(rf"^{re.escape(key)}\s*:", line.rstrip("\r")):
-                cr = "\r" if line.endswith("\r") else ""
-                lines[i] = f"{key}: {value}{cr}"
+            if re.match(rf"^{re.escape(key)}\s*:", line):
+                lines[i] = f"{key}: {value}"
                 del todo[key]
                 break
     for key, value in todo.items():
-        tail = "\r" if nl == "\r\n" else ""
-        lines.append(f"{key}: {value}{tail}")
-    new_block = "\n".join(lines)
-    return text[:m.start(1)] + new_block + text[m.end(1):], []
+        lines.append(f"{key}: {value}")
+    return text[:m.start(1)] + nl.join(lines) + text[m.end(1):], []

@@ -166,3 +166,20 @@ def test_broken_topics_json_stops_instead_of_overwriting(vault):
     # --force 才允许覆盖
     assert run_ep(vault, "EP91", runner, "--force") == 0
     assert len(runner.calls) == 1
+
+
+def test_crlf_note_keeps_crlf(vault):
+    """宿主机上 Obsidian 写的是 CRLF：块内也得是 CRLF，块外一个字节不动。"""
+    p = note_path(vault, "EP91")
+    crlf = p.read_bytes().replace(b"\n", b"\r\n")
+    p.write_bytes(crlf)
+
+    assert run_ep(vault, "EP91", FakeRunner(RAW)) == 0
+    out = p.read_bytes()
+    assert b"\n" not in out.replace(b"\r\n", b"")          # 没有混进裸 LF
+    block = re.search(rb"\r\n<!-- digest:auto -->.*?<!-- /digest -->\r\n", out, re.S)
+    assert block
+    stripped = out[:block.start()] + out[block.end():]
+    stripped = stripped.replace("整理: done\r\n".encode(), b"", 1) \
+                       .replace(f"整理版本: {VERSION}\r\n".encode(), b"", 1)
+    assert stripped == crlf
