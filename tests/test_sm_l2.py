@@ -300,6 +300,54 @@ def test_three_chapters_at_a_time_and_every_write_lands_on_the_main_thread(tmp_p
     assert runner.topics_seen == sorted(runner.topics_seen)
 
 
+class RudeRunner(SlowRunner):
+    """某一章上 runner 自己抛（CLI 不在、存档缺键、退出码非 0）。"""
+
+    def __init__(self, digest_dir, boom: str):
+        super().__init__(digest_dir, delay=0)
+        self.boom = boom
+
+    def run(self, scope, layer, unit, prompt_file, input_text, model, effort, timeout,
+            schema=None) -> dict:
+        if unit == self.boom:
+            self.calls.append(unit)
+            raise FileNotFoundError(f"假 runner 找不到存档响应：{unit}")
+        return super().run(scope, layer, unit, prompt_file, input_text, model, effort,
+                           timeout, schema)
+
+
+def test_a_runner_that_throws_takes_down_one_chapter_not_the_episode(tmp_path):
+    """runner 抛的是环境坏了，不是模型答错——但一章挂了不该把其他章掀翻，也绝不
+    静默：照样落 `_failed/`（红线 9）。"""
+    paths = VaultPaths(tmp_path)
+    chapters = [{"id": f"ch{i}", "title": f"第{i}章", "gist": "合成的交接说明",
+                 "start": hms(i * 1800), "end": hms((i + 1) * 1800), "who": ["阿桥"]}
+                for i in range(3)]
+    runner = RudeRunner(paths.digest("EP99"), boom="ch1")
+    doc, frags, failed = run_l2(paths, runner, "EP99", chapters, make_segs(180), NAMES,
+                                {"path": PROMPT, "version": "L2-topic@9.9"},
+                                generated_at="2026-03-12T23:10:00+08:00", log=lambda m: None)
+
+    assert failed == ["ch1"] and len(frags) == 2
+    assert [t["chapter"] for t in doc["topics"]] == ["ch0", "ch2"]
+    bad = paths.failed("EP99") / "L2-ch1.failed.json"
+    assert "FileNotFoundError" in json.loads(bad.read_bytes().decode("utf-8"))["errors"][0]
+
+
+def test_only_runs_the_chapters_it_is_given(tmp_path):
+    """`--only` 归 #55，参数先留着：给了就只跑这几章，其余当没完成（不渲染）。"""
+    paths = VaultPaths(tmp_path)
+    chapters = [{"id": f"ch{i}", "title": f"第{i}章", "gist": "合成的交接说明",
+                 "start": hms(i * 1800), "end": hms((i + 1) * 1800), "who": ["阿桥"]}
+                for i in range(3)]
+    runner = SlowRunner(paths.digest("EP99"), delay=0)
+    doc, frags, failed = run_l2(paths, runner, "EP99", chapters, make_segs(180), NAMES,
+                                {"path": PROMPT, "version": "L2-topic@9.9"}, only="ch2",
+                                generated_at="2026-03-12T23:10:00+08:00", log=lambda m: None)
+    assert runner.calls == ["ch2"] and failed == []
+    assert [t["chapter"] for t in doc["topics"]] == ["ch2"]
+
+
 # ---------------------------------------------------------------- prompt
 
 def test_prompt_version_and_body():

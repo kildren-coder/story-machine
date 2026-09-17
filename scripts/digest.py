@@ -145,14 +145,17 @@ def cmd_ep(args) -> int:
         effort=args.l2_effort, timeout=args.timeout, retries=args.retries,
         generated_at=now, log=lambda m: log(m))
 
-    if failed or not topics:
-        # 一章没整理出来就不渲染：半份整理稿比没有更坏，人会把它当成全部（红线 6
+    heads = (topics or {}).get("topics") or []
+    done = {t.get("chapter") for t in heads}
+    missing = [c.get("id") for c in chapters if c.get("id") not in done]
+    if missing:
+        # **每一章都完成才渲染**：半份整理稿比没有更坏，人会把它当成全部（红线 6
         # 说人只读这一面）。缺的章下次重跑只补它自己
         if write_into_note(note, None, "failed"):
             log(f"⚠ {paths.rel(note)} 没有 frontmatter，整理: failed 没写进去")
-        log(f"✖ L2 有 {len(failed) or len(chapters)} 章没整理出来"
-            f"（{'、'.join(failed) or '一章都没有'}），已落 {paths.rel(paths.failed(ep))}，"
-            f"笔记打 整理: failed")
+        where = f"，其中 {len(failed)} 章落进 {paths.rel(paths.failed(ep))}" if failed else ""
+        log(f"✖ L2 有 {len(missing)} 章没整理出来（{'、'.join(missing)}）{where}；"
+            f"笔记打 整理: failed，不写块。下次重跑只补这几章")
         return 1
 
     prov = topics.get("provenance") or {}
