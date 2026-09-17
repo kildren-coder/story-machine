@@ -1,7 +1,7 @@
 # QA — issue #52 逐章节整理：L2 按章切片、章内切话题 → EP 笔记里出现整理稿
 
-分支 `agent/issue-52`。沙箱内 `bash scripts/test.sh` 全绿（104 个 pytest 用例，
-本票新增 39 个），没有调用过 `claude -p`，没有碰过 vault，所有用例跑在
+分支 `agent/issue-52`。沙箱内 `bash scripts/test.sh` 全绿（107 个 pytest 用例，
+本票新增 42 个），没有调用过 `claude -p`，没有碰过 vault，所有用例跑在
 `tests/fixtures/vault/` 的临时副本上。
 
 ---
@@ -16,8 +16,24 @@
 | `scripts/sm/render_ep.py` | `render_outline` → `render_digest`：**按话题**出节，段落里 `<who>` → `**名**`、`<hedge>` → `<u>…</u>`，四个小节（锚点 / 说法 / 信源表 / ASR 生音），`aside` 只出段落且标题加「 · 旁白」，`filler` 不渲染但段数与合计时长报在块首行 |
 | `scripts/digest.py` | `ep` 子命令从「L1 → 渲染」变成「L1 → L2 → 渲染」；新增 `--l2-prompt` / `--l2-model`（sonnet）/ `--l2-effort`（medium）/ `--workers`（3）；每一章都完成才渲染，否则 `整理: failed`、不写块、退出码 1 |
 | `scripts/worker.ps1` | 两句提示改成事实：跑的是「整集一次 + 每章一次」，完成提示改成「整理稿已写进 EP 笔记」（静态改，沙箱跑不了 PowerShell） |
-| `SPEC.md` | §4 L2 补 prompt 文件名、空段省掉分隔行、schema 不卡 `ts`、孤儿片段、失败就不渲染、`_digest/` 只主线程写；§5.3 补话题表 provenance 的取法；§5.7 整理稿形状写全，删掉「L2 上线前是章节大纲」那一段 |
+| `SPEC.md` | §4 L2 补 prompt 文件名、空段省掉分隔行、schema 不卡 `ts`、五类内容不含 HTML 注释、完成判据加「边界对得上」、孤儿片段、失败就不渲染、`_digest/` 只主线程写且原子替换；§5.3 补话题表 provenance 的取法；§5.7 整理稿形状写全，删掉「L2 上线前是章节大纲」那一段 |
 | `tests/` | 新增 `test_sm_l2.py`（20）、`test_s2_topics.py`（13）；`test_sm_render_ep.py` 重写（6）；`test_sm_transcript.py` 加 1；`test_s1_skeleton.py`、`test_worker_static.py`、`conftest.py` 跟着改（#51 留下的章节大纲断言） |
+
+自审（实现完成后又派了一个 sonnet 子代理做对抗式复查）逮到三个真缺陷，都已修、
+各配了用例，列在最前面：
+
+1. **锚点 / 说法 / 信源 / 生音里的 HTML 注释会撑破标记块。** 这四类字段原样进
+   `<!-- digest:auto -->` … `<!-- /digest -->`；内容里混进一个 `<!-- /digest -->`
+   之后，**下一次**整块替换会在那里收尾，后半块被永久甩到块外（实测复现，违反
+   「块外一个字节不动」）。`title` / `gist` 早就拦了这一条，`paras` 由「只认两种
+   标记」挡着，漏的就是这四类。删注释等于改字（红线 5），所以只能打回，不能改。
+2. **一章算完成只认 `id` 不够。** L1 重切之后章还叫 `market`、起止时刻却变了，
+   这一章会被当成已完成跳过，笔记上留着按旧边界整理的话题，和章节表对不上——
+   静默的不一致，比重跑一章贵得多。现在还要求「首尾正好铺满这一章」。
+3. **`topics.json` 不是原子写。** 它每完成一章重写一次，同时又是「这一章跑没跑
+   过」的判据；直接 `write_bytes` 中间那一小段文件是截断的。并发用例里 worker
+   就在那一刻读到过半份 JSON（对照实验：300 次重写，直接写法下读到半份 1023 次，
+   `os.replace` 之后 0 次）。跑到一半被杀再重跑会踩到同一个坑。
 
 契约层面值得单独看的四处决定：
 
@@ -133,9 +149,9 @@ frontmatter 其他键一个字节没动。
 | 4 | 代码填的键：`bridge-01` 的 `start` 是 `00:00:00`、`market-03` 的 `end` 是 `00:42:40`、章内首尾相接、`who` 来自行表、产物里没有 `line`；schema 的 `line` 上下界 = 本章首末行号（35 / 76） | `::test_the_code_fills_ids_times_and_speakers`、`test_sm_l2.py::test_finish_fills_id_chapter_times_and_who`、`::test_the_first_topic_starts_at_the_chapter_start_and_the_last_ends_at_its_end`、`::test_two_topics_on_one_line_give_a_zero_length_topic`、`::test_the_schema_carries_this_chapters_line_range` |
 | 5 | 坏响应隔离：`bridge` 换成散文 → `_failed/EP91/L2-bridge.failed.json` 存在、`market` 三个片段照样写出、`topics.json` 里只有这三个话题、笔记无块、`整理: failed`、退出码 1；换回好响应重跑只调 1 次（`L2` / `bridge`），块出现 | `::test_one_bad_chapter_is_isolated_and_the_rest_still_land`（另有 `test_sm_l2.py::test_a_runner_that_throws_takes_down_one_chapter_not_the_episode`：runner 抛异常时也落 `_failed/`） |
 | 6 | `market` 换成闸门违规的响应（schema 合法）：检查通过、片段写出，越界的 `ts` 原样留着 | `::test_a_gate_violating_chapter_still_passes_l2` |
-| 7 | **拦**：`<b>` 标记、`talk` 的空 `paras`、段不以 `[HH:MM:SS]` 开头、`line` 越界、空 `title`、缺 `channels` 键、`ts` 写成「胡写」。**不拦、归一**：`1:05` → `00:01:05`、7 条 `quotes` 留前 6、`heard == means` 删掉、`line` 写成 `"36"`、乱序按 `line` 排、`aside` 多写的 `quotes` 留在片段里 | `test_sm_l2.py::test_a_third_kind_of_tag_in_paras_is_rejected`、`::test_empty_paras_on_a_talk_or_aside_is_rejected`、`::test_a_paragraph_without_a_timestamp_is_rejected`、`::test_a_line_outside_this_chapter_is_rejected`、`::test_empty_title_missing_key_and_unreadable_ts_are_rejected`、`::test_tidy_normalises_what_the_code_can_fix`、`::test_tidy_flattens_newlines_in_title_and_gist`、`::test_an_aside_that_wrote_quotes_keeps_them_in_the_fragment` |
-| 8 | 并发：拖慢的假 runner 断言同时在跑 ≤ 3（且 > 1）；5 章合成输入全部完成；每一次 `_digest/` 写盘都发生在主线程；worker 中途读到的 `topics.json` 每一份都是合法 JSON | `test_sm_l2.py::test_three_chapters_at_a_time_and_every_write_lands_on_the_main_thread` |
-| 9 | 幂等与增量：跑两次笔记逐字节不变、第二次 0 次调用；删掉 `frag-market-02.json` 再跑只调 1 次（`market`），`chapter == "market"` 的旧片段被清掉（`market-2` 章的诱饵不许误伤）；手改一个片段后重渲染只有块内变化；`--force` 全部重跑 | `::test_rerun_is_byte_identical_and_only_missing_chapters_are_refilled`、`::test_force_reruns_every_chapter`、`::test_orphan_topics_from_a_rerun_l1_are_swept`（L1 重跑后的孤儿片段） |
+| 7 | **拦**：`<b>` 标记、`talk` 的空 `paras`、段不以 `[HH:MM:SS]` 开头、`line` 越界、空 `title`、缺 `channels` 键、`ts` 写成「胡写」、五类内容里的 HTML 注释（自审补）。**不拦、归一**：`1:05` → `00:01:05`、7 条 `quotes` 留前 6、`heard == means` 删掉、`line` 写成 `"36"`、乱序按 `line` 排、`aside` 多写的 `quotes` 留在片段里 | `test_sm_l2.py::test_a_third_kind_of_tag_in_paras_is_rejected`、`::test_empty_paras_on_a_talk_or_aside_is_rejected`、`::test_a_paragraph_without_a_timestamp_is_rejected`、`::test_a_line_outside_this_chapter_is_rejected`、`::test_empty_title_missing_key_and_unreadable_ts_are_rejected`、`::test_tidy_normalises_what_the_code_can_fix`、`::test_tidy_flattens_newlines_in_title_and_gist`、`::test_an_aside_that_wrote_quotes_keeps_them_in_the_fragment`、`::test_an_html_comment_anywhere_in_the_rendered_text_is_rejected` |
+| 8 | 并发：拖慢的假 runner 断言同时在跑 ≤ 3（且 > 1）；5 章合成输入全部完成；每一次 `_digest/` 写盘都发生在主线程；worker 中途读到的 `topics.json` 每一份都是合法 JSON | `test_sm_l2.py::test_three_chapters_at_a_time_and_every_write_lands_on_the_main_thread`、`::test_the_topic_table_is_replaced_in_one_step`（原子替换） |
+| 9 | 幂等与增量：跑两次笔记逐字节不变、第二次 0 次调用；删掉 `frag-market-02.json` 再跑只调 1 次（`market`），`chapter == "market"` 的旧片段被清掉（`market-2` 章的诱饵不许误伤）；手改一个片段后重渲染只有块内变化；`--force` 全部重跑 | `::test_rerun_is_byte_identical_and_only_missing_chapters_are_refilled`、`::test_force_reruns_every_chapter`、`::test_orphan_topics_from_a_rerun_l1_are_swept`（L1 重跑后的孤儿片段）、`::test_a_chapter_whose_boundaries_moved_is_not_reused`（L1 重切后边界变了） |
 | 10 | `filler`：「开场与设备测试」一个字不出现、块首行有「另有 1 段杂项未渲染（合计 00:03:30）」、`frag-bridge-01.json` 在且五类内容为空；没有 `filler` 的集不出那一句 | `::test_filler_is_invisible_but_counted`、`test_sm_render_ep.py::test_filler_is_not_rendered_but_its_minutes_are_reported`、`::test_every_topic_gets_a_seekable_heading_and_its_paragraphs`（构造的无 `filler` 集） |
 | 11 | `aside` 只出 `paras`：`market-03` 那一节没有锚点 / 说法 / 信源小标题 | `::test_an_aside_topic_renders_only_its_paragraphs`、`test_sm_render_ep.py::test_an_aside_only_shows_its_paragraphs` |
 | 12 | prompt：首行匹配 `^version: L2-topic@\d+\.\d+$`；含两种标记、九个键名、三档 `kind`、「上文」「下文」「行号」；不含 `"id"` / `"start"` / `"end"`；例子里每个话题的键集合恰好是 schema 的九个键 | `test_sm_l2.py::test_prompt_version_and_body`、`::test_prompt_does_not_ask_for_what_the_code_already_knows`、`::test_the_example_in_the_prompt_passes_the_code_checks` |
@@ -171,10 +187,11 @@ frontmatter 其他键一个字节没动。
 隔离写好了（一章挂了其他章继续，整集不渲染、下次只补那一章），但**第一次跑建议
 用 `--workers 1` 看一遍**，确认单章的耗时与费用，再放回 3。
 
-另外一条不算风险、但评审值得看一眼的：**信源表的单元格不转义 `|`**。渲染不许改
-模型写的字（红线 5），所以 `name` / `quote` 里真出现竖线时那一行表格会散。合成
-样例里没有，真实样例里大概率也没有（中文全角居多）；真撞上了再决定是转义还是
-换渲染形式，不要悄悄替模型改字。
+另外一条不算风险、但评审值得看一眼的：**信源表的单元格不转义 `|`、也不管换行**。
+渲染不许改模型写的字（红线 5），所以 `name` / `quote` 里真出现竖线或换行时，那一行
+表格会散。合成样例里没有，真实样例里大概率也没有（中文全角居多）；散掉也只是块内
+的排版，下一次重跑整块替换就恢复（会撑破块的那一类——HTML 注释——已经在
+`check_frag` 里拦下了）。真撞上了再决定是转义还是换渲染形式，不要悄悄替模型改字。
 
 ---
 
@@ -255,7 +272,8 @@ python scripts\digest.py ep EP02 --vault "D:\obsidian-task\任务栏\story-machi
 | 某章调用超过 1800 秒被杀 | 章太长（L1 偶尔切出 30 分钟以上的章）或 CLI 卡住 | `--timeout 3600` 重跑那一集；连着出现就去看 L1 把章切多长了 |
 | 整理稿读着像摘要、3 小时一集只有五六千字 | prompt 的问题，不是代码的问题 | 改 `prompts\L2-topic.md`（「全长、按叙述顺序、不压成条目」那几条），升 `version:`，`-Extract EP02 -Redo`。**不要**去代码里加字数检查 |
 | 笔记里少了一整段你记得他讲过的内容，块首行的「杂项未渲染」时长很大 | 模型把正题判成了 `filler` | 去 `_digest\EP02\` 里找那个 `kind: filler` 的片段确认，然后改 prompt 的 `kind` 判据（「整段删掉会不会丢东西」）升版本重跑 |
-| 笔记里出现 `<who>` / `<hedge>` 字样，或表格散掉 | 渲染没把标记换掉（不可能，有用例）；表格散掉多半是 `name` / `quote` 里有 `\|` | 前者报 bug；后者见第 4 节最后一段 |
+| 笔记里出现 `<who>` / `<hedge>` 字样，或表格散掉 | 渲染没把标记换掉（不可能，有用例）；表格散掉多半是 `name` / `quote` 里有 `\|` 或换行 | 前者报 bug；后者见第 4 节最后一段 |
+| 某章反复挂在「里有 HTML 注释，渲染进笔记会撑破标记块」 | 模型在 `title` / `gist` / 锚点 / 说法 / 信源里写了 `<!-- … -->`（逐字稿里几乎不可能有，多半是它自己加的排版） | 重跑一次；反复出现就在 prompt 里补一句「不要写 HTML 注释」并升 `version:`。**不要**改成渲染时删注释——那是替模型改字 |
 | 抛 Python 栈、提到 `claude` | 环境问题（CLI 不在 PATH、退出码非 0、信封不是 JSON）。单章抛异常不会掀翻整集：那一章记进 `_failed/`，其他章照跑 | 修环境重跑，完成的章会跳过 |
 
 ### 5.4 回退
