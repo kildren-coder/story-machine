@@ -118,6 +118,21 @@ def test_bad_l1_goes_to_failed(vault):
     assert read_frontmatter(text)["整理"] == "failed"
 
 
+def test_failed_status_that_cannot_be_written_is_reported(vault, capsys):
+    """笔记没有 frontmatter 时 `整理: failed` 写不进去——这一步也得报出来。
+
+    不报的话人的阅读面上既没有块也没有 failed，看着像什么都没发生过（红线 9）。
+    """
+    note_path(vault, "EP91").unlink()
+    bare = "# EP91\n\n没有 frontmatter，人写的。\n"
+    p = vault / "10-Episodes" / "EP91 无头笔记.md"
+    p.write_bytes(bare.encode("utf-8"))
+
+    assert run_ep(vault, "EP91", FakeRunner(RAW_BAD)) == 1
+    assert "整理: failed 没写进去" in capsys.readouterr().out
+    assert p.read_bytes().decode("utf-8") == bare       # 写不进去就一个字节别动
+
+
 def test_missing_transcript_exits_2(vault):
     """验收 5：逐字稿不在就退出码 2，笔记一个字节都不动。"""
     before = note_text(vault, "EP91")

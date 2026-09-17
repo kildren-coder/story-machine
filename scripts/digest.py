@@ -114,8 +114,10 @@ def cmd_ep(args) -> int:
         finally:
             # 检查不过、或者 runner 自己抛了（CLI 不在、退出码非 0、信封不是
             # JSON），人的阅读面上都得看到 failed；抛的那种照抛，别在这里吞掉
-            if obj is None:
-                write_into_note(note, None, "failed")
+            if obj is None and write_into_note(note, None, "failed"):
+                # 没有 frontmatter 就写不进去。这一步也不许静默：不然人的阅读面
+                # 上既没有块也没有 failed，看上去像什么都没发生过
+                log(f"⚠ {paths.rel(note)} 没有 frontmatter，整理: failed 没写进去")
         if obj is None:
             log(f"✖ L1 检查不过（{len(errors)} 项），已落 "
                 f"{paths.rel(paths.failed(ep))}，笔记打 整理: failed")

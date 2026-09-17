@@ -1,6 +1,6 @@
 # QA — issue #51 骨架（曳光弹）：Extract EP → L1 话题表 → EP 笔记出现可跳播的话题大纲
 
-分支 `agent/issue-51`。沙箱内 `bash scripts/test.sh` 全绿（39 个 pytest 用例），
+分支 `agent/issue-51`。沙箱内 `bash scripts/test.sh` 全绿（40 个 pytest 用例），
 没有调用过 `claude -p`，没有碰过 vault，所有用例跑在 `tests/fixtures/vault/` 的
 临时副本上。
 
@@ -18,7 +18,7 @@
 | `SPEC.md` | §4.1 补 `scripts/sm/`；§4 L1 补输入头、时长取法、prompt 文件名、五条代码检查；§4.2 补 `-Redo` → `--force` 与退出码 0/1/2、找笔记的规则；§5.7 补块首行说明、`整理版本:` 取法、L2 上线前整理稿的形状 |
 | `docs/agents/domain.md` | 目录树补 `prompts/`、`scripts/digest.py`、`scripts/sm/`、`tests/` |
 | `docs/agents/afk-sandcastle.md` | 「沙箱已知坑」两处指针换成 `digest.py` / `conftest.py` 的 `vault` fixture（原来指 `stage12.py` / `test_stage12.py`） |
-| `tests/`（新，5 个文件 + `conftest.py`） | 37 个用例，逐条对应验收标准 |
+| `tests/`（新，5 个文件 + `conftest.py`） | 40 个用例，逐条对应验收标准 |
 
 契约层面值得单独看的三处决定：
 
@@ -147,6 +147,9 @@ $ python scripts/digest.py ep EP91 --vault /tmp/demobad --runner fake:tests/fixt
   Obsidian 写的是 CRLF。第一版在 CRLF 笔记里追加 `整理版本:` 时会留下一个裸 LF
   （frontmatter 正则把末行行尾吃进了分隔符），真机第一次跑就会踩到——已修，并用
   这条用例钉住。
+- 笔记没有 frontmatter 时 `整理: failed` 写不进去，这一步也报出来
+  （`test_failed_status_that_cannot_be_written_is_reported`，评审补）：不报的话
+  人的阅读面上既没有块也没有 failed，看着像什么都没发生过。
 - 标题 / `gist` 里的换行与 `<!--` 在 `check_topics` 就拦下
   （`test_title_that_would_break_the_marker_block`）：这两个字段原样进标记块，
   换行会把 `### …` 撑成两行，`<!-- /digest -->` 会让下一次整块替换只替换掉半块。
