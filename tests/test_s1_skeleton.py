@@ -65,7 +65,7 @@ def test_ep91_end_to_end(vault):
     assert fm["整理版本"] == VERSION
     # 红线 7 类比：把块和这两行去掉，人写的每一节逐字节回到原样
     stripped = without_block(text) \
-        .replace(f"整理: done\n", "", 1).replace(f"整理版本: {VERSION}\n", "", 1)
+        .replace("整理: done\n", "", 1).replace(f"整理版本: {VERSION}\n", "", 1)
     assert stripped == fixture_note_text("EP91")
 
 
@@ -152,3 +152,17 @@ def test_stdout_says_each_step_and_no_content(vault, capsys):
     assert "北港大桥收费方案" not in out
     assert "晚报报道搬滨江路" not in out
     assert NOW in note_text(vault, "EP91")              # 块首行写明生成时间
+
+
+def test_broken_topics_json_stops_instead_of_overwriting(vault):
+    """产物坏了先报出来：悄悄重跑会覆盖掉人正要看的证据。"""
+    assert run_ep(vault, "EP91", FakeRunner(RAW)) == 0
+    broken = vault / "_digest" / "EP91" / "topics.json"
+    broken.write_bytes("{截断了".encode("utf-8"))
+    runner = FakeRunner(RAW)
+    assert run_ep(vault, "EP91", runner) == 2
+    assert runner.calls == []
+    assert broken.read_bytes().decode("utf-8") == "{截断了"
+    # --force 才允许覆盖
+    assert run_ep(vault, "EP91", runner, "--force") == 0
+    assert len(runner.calls) == 1

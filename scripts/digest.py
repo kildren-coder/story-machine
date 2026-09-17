@@ -89,7 +89,17 @@ def cmd_ep(args) -> int:
 
     topics_path = paths.digest(ep) / "topics.json"
     if topics_path.exists() and not args.force:
-        obj = json.loads(topics_path.read_bytes().decode("utf-8"))
+        # 产物坏了就停在这儿报出来：悄悄重跑会把人正要看的证据覆盖掉
+        try:
+            obj = json.loads(topics_path.read_bytes().decode("utf-8"))
+        except (ValueError, UnicodeDecodeError) as e:
+            log(f"✖ {paths.rel(topics_path)} 不是合法 JSON（{e}）——看一眼再删，"
+                f"或者直接 --force 重跑")
+            return 2
+        if not (obj.get("topics") or []):
+            log(f"✖ {paths.rel(topics_path)} 里没有话题——看一眼再删，"
+                f"或者直接 --force 重跑")
+            return 2
         log(f"L1 产物已在（{paths.rel(topics_path)}），跳过调用——要重跑加 --force")
     else:
         runner = make_runner(args.runner)
