@@ -1,6 +1,6 @@
 # QA — issue #51 骨架（曳光弹）：Extract EP → L1 话题表 → EP 笔记出现可跳播的话题大纲
 
-分支 `agent/issue-51`。沙箱内 `bash scripts/test.sh` 全绿（37 个 pytest 用例），
+分支 `agent/issue-51`。沙箱内 `bash scripts/test.sh` 全绿（39 个 pytest 用例），
 没有调用过 `claude -p`，没有碰过 vault，所有用例跑在 `tests/fixtures/vault/` 的
 临时副本上。
 
@@ -138,9 +138,18 @@ $ python scripts/digest.py ep EP91 --vault /tmp/demobad --runner fake:tests/fixt
 `::test_stdout_says_each_step_and_no_content` + 块首行；红线 7 类比验收 1、2 的
 字节相等；红线 9 验收 4、8、9；红线 10 只用 `tests/fixtures/` 的合成样例。
 
-另外两条不在票面但顺手钉住的：`_pairs/` 不被 `ReplayRunner` 重写
-（`test_replay_runner_reads_pairs_and_keeps_the_archive`）；已有 `topics.json`
-被写坏时停下报错而不是悄悄覆盖（`test_broken_topics_json_stops_instead_of_overwriting`）。
+另外四条不在票面但顺手钉住的：
+
+- `_pairs/` 不被 `ReplayRunner` 重写（`test_replay_runner_reads_pairs_and_keeps_the_archive`）。
+- 已有 `topics.json` 被写坏时停下报错而不是悄悄覆盖
+  （`test_broken_topics_json_stops_instead_of_overwriting`）。
+- **CRLF 笔记往返**（`test_crlf_note_keeps_crlf`）：fixture 是 LF，宿主机上
+  Obsidian 写的是 CRLF。第一版在 CRLF 笔记里追加 `整理版本:` 时会留下一个裸 LF
+  （frontmatter 正则把末行行尾吃进了分隔符），真机第一次跑就会踩到——已修，并用
+  这条用例钉住。
+- 标题 / `gist` 里的换行与 `<!--` 在 `check_topics` 就拦下
+  （`test_title_that_would_break_the_marker_block`）：这两个字段原样进标记块，
+  换行会把 `### …` 撑成两行，`<!-- /digest -->` 会让下一次整块替换只替换掉半块。
 
 ---
 
