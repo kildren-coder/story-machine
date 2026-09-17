@@ -10,7 +10,7 @@ import json
 
 import pytest
 from conftest import RAW, RAW_BAD
-from sm.pairs import call_layer
+from sm.pairs import call_layer, retry_input
 from sm.paths import VaultPaths
 from sm.prov import PROV_KEYS, engine_of, provenance
 from sm.runner import FakeRunner, ReplayRunner, extract_json
@@ -31,7 +31,9 @@ def test_retries_then_failed(tmp_path):
     assert len(runner.calls) == 3
     assert errors == ["就是不过"]
     assert envelope["type"] == "result"
-    assert (paths.pairs("EP91") / "L1-all.in.md").read_bytes().decode("utf-8") == "输入正文"
+    in_md = (paths.pairs("EP91") / "L1-all.in.md").read_bytes().decode("utf-8")
+    assert in_md.startswith("输入正文")
+    assert "就是不过" in in_md          # 留下的是最后一趟——带着上一趟的错误
     assert (paths.pairs("EP91") / "L1-all.raw.json").exists()
     rec = json.loads((paths.failed("EP91") / "L1-all.failed.json").read_bytes().decode("utf-8"))
     assert rec["attempts"] == 3 and rec["errors"] == ["就是不过"]
@@ -106,3 +108,67 @@ def test_engine_takes_the_costliest_model():
 
     real = json.loads((RAW / "EP91" / "L1-all.raw.json").read_bytes().decode("utf-8"))
     assert engine_of(real, "sonnet") == "claude-sonnet-5"
+
+
+class ScriptedRunner:
+    """按剧本一趟给一个响应，并记下每一趟实际收到的输入。"""
+
+    replay = False
+
+    def __init__(self, results):
+        self.results = list(results)
+        self.inputs: list[str] = []
+
+    def run(self, scope, layer, unit, prompt_file, input_text, model, effort, timeout):
+        self.inputs.append(input_text)
+        return {"type": "result", "is_error": False,
+                "result": self.results[min(len(self.inputs) - 1, len(self.results) - 1)]}
+
+
+def test_retry_carries_the_previous_errors(tmp_path):
+    """重试要把上一次错在哪带上，不是把同一份输入再掷一次骰子。
+
+    EP02 上 `@0.3` 两次挂在同一个错（整行头被抄进了 `ep`），因为两趟发的输入
+    一模一样。而每掷一次要把三小时逐字稿重发一遍，约 2% 的 5h 额度。
+    """
+    paths = VaultPaths(tmp_path)
+    runner = ScriptedRunner(['{"ep": "坏的"}', '{"ep": "EP91"}'])
+
+    def check(obj):
+        if obj.get("ep") == "EP91":
+            return []
+        return ["顶层 `ep` = '坏的'，应该是 'EP91'", "范围起点不早于终点：03:09:00-03:09:00"]
+
+    obj, _, errors = call_layer(paths, runner, "EP91", "L1", "all", "p.md",
+                                "逐字稿正文", check, log=lambda m: None)
+    assert errors == [] and obj["ep"] == "EP91"
+    assert len(runner.inputs) == 2
+
+    first, second = runner.inputs
+    assert first == "逐字稿正文"                       # 第一趟一个字不多
+    assert second.startswith("逐字稿正文")              # 原材料照旧在最前面
+    assert "上一次的输出没通过检查" in second
+    assert "顶层 `ep` = '坏的'，应该是 'EP91'" in second
+    assert "范围起点不早于终点：03:09:00-03:09:00" in second
+
+
+def test_in_md_is_the_input_that_actually_produced_the_archived_response(tmp_path):
+    """`.in.md` 与 `.raw.json` 是一对：重试过的话，留下的是最后那一趟。"""
+    paths = VaultPaths(tmp_path)
+    runner = ScriptedRunner(['{"ep": "坏的"}', '{"ep": "EP91"}'])
+    call_layer(paths, runner, "EP91", "L1", "all", "p.md", "逐字稿正文",
+               lambda o: [] if o.get("ep") == "EP91" else ["不过"], log=lambda m: None)
+
+    in_md = (paths.pairs("EP91") / "L1-all.in.md").read_bytes().decode("utf-8")
+    assert in_md == runner.inputs[-1]
+    assert "上一次的输出没通过检查" in in_md
+
+
+def test_retry_block_truncates_a_flood_of_errors(tmp_path):
+    """一百条错误不必全附上：附一屏比附一沓管用。"""
+    errs = [f"第{n}条错误" for n in range(1, 101)]
+    text = retry_input("正文", errs)
+    assert "第1条错误" in text and "第10条错误" in text
+    assert "第11条错误" not in text
+    assert "还有 90 条同类问题" in text
+    assert text.startswith("正文")

@@ -6,6 +6,11 @@
 
 **绝不静默**：检查不过就重试，重试到上限还不过就把错误和信封一起落
 `_failed/<scope>/<层>-<单元>.failed.json` 并返回 None，由调用方决定怎么报警。
+
+**重试要把上一次的错误带上**。发一模一样的输入不叫重试，叫重掷骰子：EP02 上
+`@0.3` 两次挂在同一个错（把整行头抄进了 `ep`），而每掷一次要把三小时逐字稿
+重发一遍。实测五次跑里四次第一发不过，全是机械格式错——范围倒置、引号没转义、
+字段抄错、零长度范围——这类错误附上原话几乎必然一次改对。
 """
 from __future__ import annotations
 
@@ -14,6 +19,31 @@ from pathlib import Path
 
 from .prov import now_iso
 from .runner import extract_json
+
+
+MAX_RETRY_ERRORS = 10        # 错误太多时只带前几条：附一屏比附一沓管用
+
+RETRY_HEAD = """
+
+=== 上一次的输出没通过检查 ===
+
+上面的材料一个字没变。你上一次的输出有下面这些问题，这一次请改掉，其余照常：
+
+"""
+
+RETRY_TAIL = """
+
+重新输出完整结果，不要解释你改了什么。
+"""
+
+
+def retry_input(input_text: str, errors: list[str]) -> str:
+    """原输入 + 一段「上次错在哪」。每次都从原输入拼，错误不累积。"""
+    shown = errors[:MAX_RETRY_ERRORS]
+    lines = [f"- {e}" for e in shown]
+    if len(errors) > len(shown):
+        lines.append(f"- （还有 {len(errors) - len(shown)} 条同类问题，一并改掉）")
+    return input_text.rstrip() + RETRY_HEAD + "\n".join(lines) + RETRY_TAIL
 
 
 def _write_json(path: Path, obj) -> None:
@@ -37,15 +67,17 @@ def call_layer(paths, runner, scope: str, layer: str, unit: str, prompt_file: Pa
     raw_path = pairs / f"{layer}-{unit}.raw.json"
     archived = getattr(runner, "replay", False)      # 重放时那两份就是正本，别重写
 
-    if not archived:
-        in_path.write_bytes(input_text.encode("utf-8"))
-
     obj: dict | None = None
     envelope: dict = {}
     errors: list[str] = []
+    text = input_text
     for attempt in range(1, retries + 2):
+        # 每一趟都把这一趟实际发出去的输入落盘：`.in.md` 与 `.raw.json` 是一对，
+        # 两端必须对得上（重试过的话，留下的就是最后那一趟）
+        if not archived:
+            in_path.write_bytes(text.encode("utf-8"))
         log(f"    {layer}-{unit} 第 {attempt} 次调用（{model} / effort {effort}）…")
-        envelope = runner.run(scope, layer, unit, prompt_file, input_text,
+        envelope = runner.run(scope, layer, unit, prompt_file, text,
                               model, effort, timeout)
         if not archived:
             _write_json(raw_path, envelope)
@@ -58,6 +90,7 @@ def call_layer(paths, runner, scope: str, layer: str, unit: str, prompt_file: Pa
             return obj, envelope, []
         log(f"    {layer}-{unit} 检查不过（{len(errors)} 项）：{errors[0]}")
         obj = None
+        text = retry_input(input_text, errors)
 
     failed = paths.failed(scope) / f"{layer}-{unit}.failed.json"
     _write_json(failed, {

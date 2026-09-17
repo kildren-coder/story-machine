@@ -117,7 +117,8 @@ L7      渲染      纯代码 ──► 日报 + 事件笔记 + 跨 UP 对照
 
 - 一层一个无头调用：`claude -p --model <m> --effort <e> --system-prompt-file prompts/<层>.md --allowedTools ""`，输入走文件。
 - 每层每单元留三份：原样输入 `_pairs/EP{n}/<层>-<单元>.in.md`、原始响应 `.raw.json`、解析后产物（`_digest/`）。`--replay` 从原始响应免额度重渲染。
-- 失败只重跑该层该单元；schema 不过进 `_failed/` 报警，绝不静默丢。
+- 失败只重跑该层该单元；重试时把上一次的检查错误附在输入末尾（最多 10 条，超出的报条数），原材料不变；schema 不过进 `_failed/` 报警，绝不静默丢。
+- `_pairs/` 的 `.in.md` 与 `.raw.json` 成对：重试过的话，留下的是最后一趟实际发出的输入与它的响应。
 - prompt 带版本号（文件首行 `version:`），产物 provenance 记 `prompt_version`。每层以 EP02 为 golden 样例。
 - 不联网的层（L1、L2、L4、L6）不得引入逐字稿以外的事实；联网的层（L5a、L5b）每条判断必带链接。
 - 单元命名：L1 与 L4、L6 的单元是 `all`，L2 的单元是话题 `id`，L5 的单元是事件 `id`。
