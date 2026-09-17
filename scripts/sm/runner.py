@@ -100,8 +100,16 @@ class FakeRunner(_ArchiveRunner):
     """测试用：读 `tests/fixtures/raw/<scope>/<层>-<单元>.raw.json`。"""
 
 
+MAX_JSON_REPAIRS = 30
+
+
 def extract_json(raw: str) -> dict:
-    """从模型回答里挖出那个 JSON 对象。它可能裹在 ``` 里或带前言。"""
+    """从模型回答里挖出那个 JSON 对象。它可能裹在 ``` 里或带前言。
+
+    字符串值里混进一个野引号或野反斜杠时（EP02 上 45 轮出现 1 次：`gist` 里
+    冒出 `�">` 三个字符），整份 JSON 就解析不了。那是一个字符的事，不该让整集
+    重发一趟：`_loads_repairing` 把那个引号转义掉再读，模型写的字一个不动。
+    """
     s = (raw or "").strip()
     fence = re.search(r"```(?:json)?\s*(.+?)```", s, re.S)
     if fence:
@@ -109,6 +117,21 @@ def extract_json(raw: str) -> dict:
     start = s.find("{")
     if start < 0:
         raise ValueError("响应里没有 JSON 对象")
+    body = _balanced(s, start)
+    if body is not None:
+        try:
+            return json.loads(body)
+        except json.JSONDecodeError:
+            pass
+    # 括号配平失败多半是野引号把字符串的开合搞反了：退回到「最后一个 }」再修
+    end = s.rfind("}")
+    if end <= start:
+        raise ValueError("JSON 对象没有闭合")
+    return _loads_repairing(s[start:end + 1])
+
+
+def _balanced(s: str, start: int) -> str | None:
+    """从 `start` 起按括号深度找到那个对象的闭合处；找不到返回 None。"""
     depth, in_str, esc = 0, False, False
     for idx in range(start, len(s)):
         ch = s[idx]
@@ -127,5 +150,26 @@ def extract_json(raw: str) -> dict:
         elif ch == "}":
             depth -= 1
             if depth == 0:
-                return json.loads(s[start:idx + 1])
-    raise ValueError("JSON 对象没有闭合")
+                return s[start:idx + 1]
+    return None
+
+
+def _loads_repairing(text: str) -> dict:
+    """反复读；每次读不过，就把出错点前最近的那个引号转义掉（或把非法反斜杠
+    翻倍）再试。修不动（出错点不再前进）就把最后一次的错抛出去。"""
+    last_pos = -1
+    for _ in range(MAX_JSON_REPAIRS):
+        try:
+            return json.loads(text)
+        except json.JSONDecodeError as e:
+            if e.pos <= last_pos:
+                raise ValueError(f"JSON 修不好：{e.msg}（第 {e.lineno} 行）") from e
+            last_pos = e.pos
+            if e.msg.startswith("Invalid \\escape") and e.pos < len(text) and text[e.pos] == "\\":
+                text = text[:e.pos] + "\\\\" + text[e.pos + 1:]
+                continue
+            q = text.rfind('"', 0, e.pos)
+            if q <= 0:
+                raise ValueError(f"JSON 修不好：{e.msg}（第 {e.lineno} 行）") from e
+            text = text[:q] + '\\"' + text[q + 1:]
+    raise ValueError("JSON 修不好：野引号太多")

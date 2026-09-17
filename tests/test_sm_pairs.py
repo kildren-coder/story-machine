@@ -90,6 +90,33 @@ def test_extract_json_shapes():
         extract_json('{"ep": "EP91"')
 
 
+def test_a_stray_quote_in_a_value_is_escaped_not_rejected():
+    """EP02 上 45 轮出现 1 次：`gist` 里冒出 `�">` 三个字符（模型侧的字符毛刺，
+    另一轮的标题里也出现过 `阿巴拉契�亚`），整份 JSON 就读不了。那是一个字符
+    的事，不该让整集重发一趟——把那个引号转义掉再读，模型写的字一个不动。"""
+    raw = ('```json\n{"topics": [\n'
+           '  {"id": "a", "title": "第一段", "kind": "talk", "start": "00:00:00",\n'
+           '   "who": ["瓜哥"], "gist": "瓜哥讲一位年�">支持民主党的候选人。"},\n'
+           '  {"id": "b", "title": "第二段", "kind": "talk", "start": "00:05:00",\n'
+           '   "who": ["瓜哥"], "gist": "正常的一条。"}\n'
+           ']}\n```')
+    obj = extract_json(raw)
+    assert [t["id"] for t in obj["topics"]] == ["a", "b"]
+    assert obj["topics"][0]["gist"] == '瓜哥讲一位年�">支持民主党的候选人。'   # 原样
+
+    # 野反斜杠（非法转义）翻倍成字面反斜杠
+    obj = extract_json('{"gist": "路径 C:\\x 那种"}')
+    assert obj["gist"] == "路径 C:\\x 那种"
+
+    # 两个野引号也修得动；纯散文、没闭合的照样拒
+    obj = extract_json('{"gist": "他说"好"，然后走了"}')
+    assert obj["gist"] == '他说"好"，然后走了'
+    with pytest.raises(ValueError):
+        extract_json("这里一个 JSON 都没有")
+    with pytest.raises(ValueError):
+        extract_json('{"gist": "开了引号没关')
+
+
 def test_provenance_keys_are_spec_9():
     """验收 9：字段集合 == §9。"""
     p = provenance(["EP91.transcript.json"], "L1", "all", "claude-sonnet-5", "low",

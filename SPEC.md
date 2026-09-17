@@ -126,7 +126,7 @@ L7      渲染      纯代码 ──► 日报 + 事件笔记 + 跨 UP 对照
 - 各层共用的机械件在 `scripts/sm/`：文本与时间戳、EP 笔记读写、vault 路径、逐字稿渲染（§5.1 → §5.2）、runner 三形态、三份留档与 `_failed/`、provenance。
 - 文件位置：解析后产物 `_digest/EP{n}/topics.json`、`_digest/EP{n}/frag-<topic>.json`、`_digest/EP{n}/gates.json`、`_digest/{date}/events.json`、`_digest/{date}/check-<event>.json`；原样输入与原始响应 `_pairs/EP{n}/L1-all.in.md` / `.raw.json`、`_pairs/EP{n}/L2-<topic>.in.md` / `.raw.json`、`_pairs/{date}/L4-all.in.md` / `.raw.json`（L5a/L5b 为 `L5a-<event>` / `L5b-<event>`，L6 为 `L6-all`）；不过 schema 的单元 `_failed/EP{n}/<层>-<单元>.failed.json` 或 `_failed/{date}/…`。
 - JSON 产物的 provenance 是顶层 `provenance` 对象（§9），schema 检查忽略该键。
-- 调用走同一个 runner 接口，三种实现：真实 `claude -p`；`--replay`（读 `_pairs/` 里的 `.raw.json`）；测试用假 runner（读 `tests/fixtures/raw/<EP 或日期>/<层>-<单元>.raw.json`，缺键报错不静默）。原始响应信封按 `--output-format json` 的形状，解析时取 `result` 里的 JSON（允许围栏与前言）。
+- 调用走同一个 runner 接口，三种实现：真实 `claude -p`；`--replay`（读 `_pairs/` 里的 `.raw.json`）；测试用假 runner（读 `tests/fixtures/raw/<EP 或日期>/<层>-<单元>.raw.json`，缺键报错不静默）。原始响应信封按 `--output-format json` 的形状，解析时取 `result` 里的 JSON（允许围栏与前言；字符串值里的野引号与非法反斜杠由代码转义后再读，不打回）。
 - 缺产物就跑，产物齐全就跳过；`--force` 才覆盖；`--from <层>` 从该层起强制重跑；`--only <单元>` 只跑指定单元。
 
 ### L1 骨架：整集 → 话题表
