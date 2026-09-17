@@ -121,7 +121,7 @@ def test_rerun_keeps_the_generated_at_from_the_product(vault):
 
 
 def test_bad_l1_goes_to_failed(vault):
-    """验收 4：起点不是行首 + 缺 kind → `_failed/`、整理: failed、无块、退出码 1。"""
+    """验收 4：起点超出整集 + 缺 kind → `_failed/`、整理: failed、无块、退出码 1。"""
     runner = FakeRunner(RAW_BAD)
     assert run_ep(vault, "EP91", runner) == 1
     assert len(runner.calls) == 2                      # 默认 retries=1
@@ -129,7 +129,7 @@ def test_bad_l1_goes_to_failed(vault):
     failed = vault / "_failed" / "EP91" / "L1-all.failed.json"
     assert failed.exists()
     errs = "\n".join(json.loads(failed.read_bytes().decode("utf-8"))["errors"])
-    assert "00:22:07" in errs and "行首时间戳" in errs   # 夜市的起点是自己算的
+    assert "00:45:00" in errs and "超过整集时长" in errs  # 本集只有 00:42:40
     assert "缺字段" in errs and "kind" in errs          # qa 话题没有 kind
     assert not (vault / "_digest" / "EP91" / "topics.json").exists()
 

@@ -345,9 +345,11 @@ def model_shape(product: dict) -> dict:
                        for t in product["topics"]]}
 
 
-# L1 的坏输出：一个起点不是行首时间戳（00:22:07 行首没出现过）、一个话题缺 kind
+# L1 的坏输出：一个起点超过整集时长（本集 00:42:40）、一个话题缺 kind。
+# 起点写偏几十秒不算坏（`with_ends` 照样闭合链条），写到集外才是坏——
+# EP01 实测把另一集的时长 03:10:43 抄了进来。
 EP91_TOPICS_BAD = model_shape(EP91_TOPICS)
-EP91_TOPICS_BAD["topics"][2]["start"] = "00:22:07"
+EP91_TOPICS_BAD["topics"][2]["start"] = "00:45:00"
 del EP91_TOPICS_BAD["topics"][4]["kind"]
 
 # ------------------------------------------------------------------ 话题片段（§5.4）

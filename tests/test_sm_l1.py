@@ -4,25 +4,24 @@
 `check_topics` 是红线 9 的入口：它判不过的单元会被拦进 `_failed/`，所以它宁可
 啰嗦也不能放水；但它**只判形状**，一个字都不许改（红线 2）。
 
-时间这一侧只剩三条检查——起点照抄自行首、第一个是第一行、严格递增。零长度、
-倒置、空洞、重叠、越界这五类曾经最常见的错误已经**在结构上不可能发生**：模型
-不再写终点，终点由 `with_ends` 接上。
+时间这一侧只剩两条检查——起点不超过时长、一个比一个晚。零长度、倒置、空洞、
+重叠、越界这五类曾经最常见的错误已经**在结构上不可能发生**：模型不再写终点，
+终点由 `with_ends` 接上。格式松紧由 `read_start` 兜住，首个起点由 `with_ends`
+归零，都不打回重跑。
 """
 from __future__ import annotations
 
 import re
 
 from conftest import REPO
-from sm.l1 import build_input, check_topics, line_starts, with_ends
+from sm.l1 import build_input, check_topics, read_start, with_ends
 from sm.prov import read_prompt
 
 PROMPT = REPO / "prompts" / "L1-skeleton.md"
 DUR = 600                                              # 10:00 的一集
-# 逐字稿每 30 秒一行，所以行首时间戳就是这些；`start` 只能从里面挑
-STARTS = [f"00:{m:02d}:{s:02d}" for m in range(10) for s in (0, 30)]
 
 
-def topics(*starts: str) -> dict:
+def topics(*starts) -> dict:
     out = []
     for n, st in enumerate(starts, 1):
         out.append({"id": f"t{n}", "title": f"话题{n}", "kind": "talk" if n % 2 else "aside",
@@ -30,32 +29,33 @@ def topics(*starts: str) -> dict:
     return {"topics": out}
 
 
-def errs(obj, starts: list[str] | None = None) -> str:
-    return "\n".join(check_topics(obj, DUR, starts if starts is not None else STARTS))
+def errs(obj) -> str:
+    return "\n".join(check_topics(obj, DUR))
 
 
-def test_copied_starts_pass():
-    assert check_topics(topics("00:00:00", "00:05:00"), DUR, STARTS) == []
+def test_ordered_starts_pass():
+    assert check_topics(topics("00:00:00", "00:05:00"), DUR) == []
 
 
-def test_start_must_be_a_line_head():
-    """自己算出来的时刻一律不认——`start` 只能是复制来的。"""
-    e = errs(topics("00:00:00", "00:03:07"))
-    assert "不是逐字稿里出现过的行首时间戳" in e and "00:03:07" in e
+def test_a_start_between_two_lines_is_fine():
+    """行首每 30 秒才有一个（ASR 段长中位 29.9 秒），模型想切的地方常在两行
+    之间。**逼它照抄行首只会逼出编造的时间戳**——EP03 上两轮都写了输入里
+    根本没有的 00:18:13。差几秒无所谓：链条照样由 `with_ends` 闭合。"""
+    assert check_topics(topics("00:00:00", "00:03:07"), DUR) == []
 
 
-def test_a_near_miss_is_told_which_line_head_it_meant():
-    """差一秒、或者写成 MM:SS 的，报错要带上最近那个行首——看见正确答案就能
-    一次改对，不必再赌下一趟（一趟就是整集逐字稿重发一遍）。"""
-    assert "最近的一个是 00:05:00" in errs(topics("00:00:00", "00:05:01"))
-    # 连时刻都算不出来的（漏了小时位、乱写）就没有「最近」可言，只报不合法
-    e = errs(topics("00:00:00", "05:00"))
-    assert "不是逐字稿里出现过的行首时间戳" in e and "最近的一个是" not in e
+def test_a_timestamp_missing_its_hour_is_read_not_rejected():
+    """EP03 实测写过 ['03:34', '05:09']。这种能读懂，就别打回整集重跑。"""
+    assert read_start("05:09") == 309 and read_start("00:05:09") == 309
+    assert check_topics(topics("00:00:00", "05:09"), DUR) == []
+    assert read_start("胡写") is None
+    assert "读不出时刻" in errs(topics("00:00:00", "胡写"))
 
 
-def test_first_topic_starts_at_the_first_line():
-    """开头漏掉一段就等于整集少讲一块，红线 2 不删事。"""
-    assert "必须是第一行的 00:00:00" in errs(topics("00:00:30", "00:05:00"))
+def test_a_start_past_the_duration_is_rejected():
+    """EP01 实测把另一集的时长 03:10:43 写了进来（本集只有 02:21:26）。
+    这个必须拦：它不是精度问题，是时间戳根本不来自这一集。"""
+    assert "超过整集时长" in errs(topics("00:00:00", "00:11:00"))
 
 
 def test_starts_must_strictly_increase():
@@ -68,7 +68,7 @@ def test_ends_are_derived_so_the_chain_can_never_break():
     """`with_ends` 接出来的链：首尾相接、无缝、无重叠、无零长度。
 
     这一条是整套改造的理由——从前模型要手写 2N 个时间戳、其中 N-1 对必须两两
-    相等，实测五次真跑四次挂在这上面；现在它只写 N 个、而且是复制来的。
+    相等，三集九次实测挂了三次；现在它只写 N 个，而且写偏了也不要紧。
     """
     ts = with_ends(topics("00:00:00", "00:05:00", "00:07:30")["topics"], DUR)
     assert [t["end"] for t in ts] == ["00:05:00", "00:07:30", "00:10:00"]
@@ -77,13 +77,11 @@ def test_ends_are_derived_so_the_chain_can_never_break():
     assert all(t["start"] < t["end"] for t in ts)      # 零长度不可能
 
 
-def test_line_starts_reads_the_text_actually_sent():
-    """行首集合从实际发出去的那份文本里数，不另算一遍。"""
-    segs = [{"start": 0.0, "end": 20.0, "speaker": "SPEAKER_00", "text": "开场"},
-            {"start": 40.0, "end": 90.0, "speaker": "SPEAKER_00", "text": "正题"}]
-    text = build_input("EP02", segs, {"SPEAKER_00": "瓜哥"})
-    assert line_starts(text) == ["00:00:00", "00:00:40"]
-    assert check_topics(topics("00:00:00", "00:00:40"), 90, line_starts(text)) == []
+def test_with_ends_normalises_the_head_and_the_format():
+    """首个起点归零、MM:SS 补成 HH:MM:SS——产物里的时间戳形状是一致的。"""
+    ts = with_ends(topics("00:00:20", "05:09")["topics"], DUR)
+    assert ts[0]["start"] == "00:00:00"                # 开头那 20 秒并进第一个话题
+    assert ts[1]["start"] == "00:05:09" and ts[0]["end"] == "00:05:09"
 
 
 def test_field_and_type_errors():
@@ -105,8 +103,8 @@ def test_duplicate_id():
 
 
 def test_shape_errors():
-    assert check_topics([], DUR, STARTS) == ["顶层不是对象"]
-    assert "`topics` 不是非空数组" in "\n".join(check_topics({}, DUR, STARTS))
+    assert check_topics([], DUR) == ["顶层不是对象"]
+    assert "`topics` 不是非空数组" in "\n".join(check_topics({}, DUR))
 
 
 def test_prompt_version_and_schema_in_body():
