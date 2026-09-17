@@ -17,6 +17,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
@@ -303,6 +304,12 @@ def _check_items(t: dict, tag: str) -> list[str]:
                     errs.append(f"{tag}: `{key}` 第 {i} 条缺 `{k}`")
                 elif not isinstance(it[k], str):
                     errs.append(f"{tag}: `{key}` 第 {i} 条的 `{k}` 不是字符串")
+                # 这些字段原样落进 EP 笔记的标记块：里面混进 `<!-- /digest -->`，
+                # 下一次整块替换就在那里收尾，后半块被甩到块外、再也清不掉
+                # （红线 5：块外一个字节不动）。删注释等于改字，只能打回
+                elif "<!--" in it[k]:
+                    errs.append(f"{tag}: `{key}` 第 {i} 条的 `{k}` 里有 HTML 注释，"
+                                f"渲染进笔记会撑破标记块")
             if "ts" in keys and isinstance(it.get("ts"), str) and parse_hms(it["ts"]) is None:
                 errs.append(f"{tag}: `{key}` 第 {i} 条的 `ts` = {it['ts']!r} 读不出时刻，"
                             f"要写成 HH:MM:SS")
@@ -380,8 +387,17 @@ def topics_doc(ep: str, chapters: list[dict], done: dict, *, model: str, effort:
 # ---------------------------------------------------------------- 跑一集
 
 def _write_json(path: Path, obj) -> None:
+    """先写临时文件再 `os.replace`——落盘要么是旧的一整份，要么是新的一整份。
+
+    `topics.json` 每完成一章就重写一次，而它同时是「这一章跑没跑过」的判据：
+    直接 `write_bytes` 的话，这中间有一小段时间文件是截断的，谁在那一刻读它
+    （下一趟的 `read_done`、跑到一半被杀之后的下一次 `-Extract`）都会读到半份
+    JSON，整集的已完成状态凭空蒸发。`os.replace` 在 POSIX 与 Windows 上都是原子的。
+    """
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_bytes((json.dumps(obj, ensure_ascii=False, indent=1) + "\n").encode("utf-8"))
+    tmp = path.with_name(path.name + ".tmp")
+    tmp.write_bytes((json.dumps(obj, ensure_ascii=False, indent=1) + "\n").encode("utf-8"))
+    os.replace(tmp, path)
 
 
 def _read_json(path: Path):
@@ -394,21 +410,27 @@ def _read_json(path: Path):
 def read_done(paths, ep: str, chapters: list[dict], log=print) -> tuple[dict, list[str]]:
     """已完成的章 → 它的片段；外加孤儿话题的 `id`。
 
-    **一章算完成** = 话题表里有 `chapter` 等于它的话题，且这些话题的片段文件都在
-    （片段写了一半被杀的那种，话题表还没更新，这里就当它没完成，重跑补上）。
-    话题表里 `chapter` 不在当前章节表里的是孤儿（L1 重跑过，章节变了）。
+    **一章算完成** = 话题表里有 `chapter` 等于它的话题、这些话题的片段文件都在、
+    而且它们首尾正好铺满这一章（片段写了一半被杀的那种，话题表还没更新，这里就
+    当它没完成，重跑补上）。
+    话题表里 `chapter` 不在当前章节表里的是孤儿（L1 重跑过，章节没了）。
+
+    **边界也要对上**：L1 重跑后 `id` 可能照旧（`market` 还叫 `market`）而起止时刻
+    换了。只认 `id` 的话这一章会被当成已完成跳过，笔记上留着按旧边界整理的话题，
+    与章节表对不上——那是静默的不一致，比重跑一章贵得多。
     """
     d = paths.digest(ep)
     doc = _read_json(d / "topics.json") if (d / "topics.json").exists() else None
-    if (d / "topics.json").exists() and doc is None:
+    if (d / "topics.json").exists() and not isinstance(doc, dict):
         log(f"    ⚠ {paths.rel(d / 'topics.json')} 读不出来，当作没整理过——各章会重跑")
-    ids = {c.get("id") for c in chapters}
+        doc = None
+    spans = {c.get("id"): (c.get("start"), c.get("end")) for c in chapters}
     want: dict[str, list[str]] = {}
     orphans: list[str] = []
     for t in (doc or {}).get("topics") or []:
         if not isinstance(t, dict) or not t.get("id"):
             continue
-        if t.get("chapter") in ids:
+        if t.get("chapter") in spans:
             want.setdefault(t["chapter"], []).append(t["id"])
         else:
             orphans.append(t["id"])
@@ -416,8 +438,12 @@ def read_done(paths, ep: str, chapters: list[dict], log=print) -> tuple[dict, li
     done: dict[str, list[dict]] = {}
     for ch, tids in want.items():
         frags = [_read_json(d / f"frag-{tid}.json") for tid in tids]
-        if all(isinstance(f, dict) for f in frags):
-            done[ch] = frags
+        if not all(isinstance(f, dict) for f in frags):
+            continue
+        if (frags[0].get("start"), frags[-1].get("end")) != spans[ch]:
+            log(f"    L2：章 {ch} 的起止时刻跟章节表对不上（L1 重切过？），这一章重跑")
+            continue
+        done[ch] = frags
     return done, orphans
 
 

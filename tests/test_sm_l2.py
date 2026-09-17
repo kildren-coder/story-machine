@@ -152,6 +152,21 @@ def test_empty_title_missing_key_and_unreadable_ts_are_rejected():
     weird = topic(3, quotes=[{"ts": "胡写", "who": "阿桥", "text": "原话"}])
     assert "读不出时刻" in errs({"topics": [weird]})
     assert "撑破标记块" in errs({"topics": [topic(3, gist="收尾 <!-- /digest -->")]})
+
+
+def test_an_html_comment_anywhere_in_the_rendered_text_is_rejected():
+    """锚点 / 说法 / 信源 / 生音也原样进标记块：里面混进 `<!-- /digest -->`，下一次
+    整块替换就在那里收尾，后半块被甩到块外、再也清不掉（红线 5）。删注释等于改字，
+    只能打回。`paras` 那一侧由「只认两种标记」挡住。"""
+    for kind, item in (
+            ("quotes", {"ts": "00:01:00", "who": "阿桥", "text": "他说 <!-- /digest --> 这句"}),
+            ("claims", {"ts": "00:01:00", "who": "阿桥", "claim": "<!-- x -->", "quote": "原话"}),
+            ("channels", {"ts": "00:01:00", "who": "阿桥", "name": "<!-- x -->",
+                          "kind": "公众号", "quote": "原话"}),
+            ("asr", {"heard": "<!-- x -->", "means": "北港"})):
+        assert "撑破标记块" in errs({"topics": [topic(3, **{kind: [item]})]}), kind
+    para = {"topics": [topic(3, paras=["[00:01:00] 收尾 <!-- /digest -->"])]}
+    assert "只认 `<who>` 与 `<hedge>`" in errs(para)
     assert check_frag([], 1, 40) == ["顶层不是对象"]
     assert check_frag({"topics": []}, 1, 40) == ["`topics` 不是非空数组"]
 
@@ -298,6 +313,33 @@ def test_three_chapters_at_a_time_and_every_write_lands_on_the_main_thread(tmp_p
     assert set(writes) == {threading.main_thread().name}
     # worker 中途读到的话题表每一份都是完整 JSON（上面已经 json.loads 过）
     assert runner.topics_seen == sorted(runner.topics_seen)
+
+
+def test_the_topic_table_is_replaced_in_one_step(tmp_path, monkeypatch):
+    """落盘要么是旧的一整份，要么是新的一整份。
+
+    `topics.json` 每完成一章重写一次，而它同时是「这一章跑没跑过」的判据。直接
+    `write_bytes` 的话中间有一小段时间文件是截断的：并发用例里就撞上过——worker
+    在那一刻读它，读到半份 JSON，那一章被记成失败。
+    """
+    import sm.l2 as l2
+    p = tmp_path / "topics.json"
+    l2._write_json(p, {"topics": [{"id": "old"}]})
+
+    wrote: list[str] = []
+    real = Path.write_bytes
+
+    def spy(self, data):
+        wrote.append(self.name)
+        # 写的过程中，正式那一份必须还是旧的、完整的
+        assert json.loads(p.read_bytes().decode("utf-8"))["topics"][0]["id"] == "old"
+        return real(self, data)
+
+    monkeypatch.setattr(Path, "write_bytes", spy)
+    l2._write_json(p, {"topics": [{"id": "new"}]})
+    assert wrote == ["topics.json.tmp"]
+    assert json.loads(p.read_bytes().decode("utf-8"))["topics"][0]["id"] == "new"
+    assert list(tmp_path.glob("*.tmp")) == []
 
 
 class RudeRunner(SlowRunner):

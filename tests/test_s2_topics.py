@@ -286,6 +286,23 @@ def test_force_reruns_every_chapter(vault):
     assert note_text(vault, "EP91") == first
 
 
+def test_a_chapter_whose_boundaries_moved_is_not_reused(vault):
+    """L1 重切之后章还叫 `market`、起止时刻却变了：只认 `id` 的话这一章会被当成
+    已完成跳过，笔记上留着按旧边界整理的话题，和章节表对不上——那是静默的不一致。"""
+    assert run_ep(vault, "EP91", FakeRunner(RAW)) == 0
+    chapters = digest(vault, "EP91", "chapters.json")
+    chapters["chapters"][0]["end"] = "00:14:00"          # 假装 L1 重切，边界挪了
+    chapters["chapters"][1]["start"] = "00:14:00"
+    (vault / "_digest" / "EP91" / "chapters.json").write_bytes(
+        json.dumps(chapters, ensure_ascii=False, indent=1).encode("utf-8"))
+
+    runner = FakeRunner(RAW)
+    assert run_ep(vault, "EP91", runner) == 0
+    assert sorted(runner.calls) == [("EP91", "L2", "bridge"), ("EP91", "L2", "market")]
+    topics = digest(vault, "EP91", "topics.json")["topics"]
+    assert topics[1]["end"] == "00:14:00" and topics[2]["start"] == "00:14:00"
+
+
 def test_orphan_topics_from_a_rerun_l1_are_swept(vault):
     """L1 重跑过、章节表变了：话题表里 `chapter` 对不上的话题连片段一起清掉。"""
     assert run_ep(vault, "EP91", FakeRunner(RAW)) == 0
