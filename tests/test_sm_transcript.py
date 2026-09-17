@@ -11,7 +11,8 @@ import re
 from conftest import FIX, fixture_note_text
 from sm.note import read_frontmatter, read_speakers
 from sm.text import hms
-from sm.transcript import build_lines, duration_s, line_t, read_transcript, render_lines
+from sm.transcript import (build_lines, duration_s, line_t, read_transcript, render_lines,
+                           slice_chapter)
 
 LINE_RE = re.compile(r"^(\d+) \[(\d\d:\d\d:\d\d)\] (?:([^:]{1,20}): )?(.*)$")
 
@@ -113,6 +114,27 @@ def test_line_numbers_map_back_to_the_timestamp_printed_on_that_line():
         assert hms(line_t(table, int(m.group(1)))) == m.group(2)
     assert line_t(table, 0) is None and line_t(table, len(table) + 1) is None
     assert line_t(table, "7") is None and line_t(table, 7) == 210
+
+
+def test_slice_chapter_pads_two_minutes_and_truncates_at_the_episode_edges():
+    """L2 的切片：本章 + 前后各 2 分钟，越过首尾的那一段是空的（issue #52 验收 3）。"""
+    segs, _ = load("EP91")
+    lines = build_lines(segs)
+
+    before, market, after = slice_chapter(lines, 1140, 2560)        # market 章
+    assert [ln["n"] for ln in before] == [32, 33, 34]               # 00:17:00 起
+    assert market[0]["n"] == 35 and market[-1]["n"] == 76
+    assert after == []                                              # 章尾就是整集末尾
+
+    before, body, after = slice_chapter(lines, 0, 1140)             # bridge 章
+    assert before == []                                             # 章首就是整集开头
+    assert body[0]["n"] == 1 and body[-1]["n"] == 34
+    assert [ln["n"] for ln in after] == [35, 36, 37, 38]            # 00:21:00 前
+
+    # 余量可调，行不切开：改 pad 只改两侧带几行，本章那一段一个字不变
+    narrow = slice_chapter(lines, 1140, 2560, pad=60)
+    assert [ln["n"] for ln in narrow[0]] == [34]                    # 00:18:00 起
+    assert narrow[1] == market
 
 
 def test_duration_comes_from_the_last_segment():

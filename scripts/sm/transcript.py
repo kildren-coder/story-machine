@@ -80,6 +80,21 @@ def pick_lines(lines: list[dict], start: float | None = None,
             if (start is None or ln["t"] >= start) and (end is None or ln["t"] < end)]
 
 
+def slice_chapter(lines: list[dict], start_s: float, end_s: float,
+                  pad: float = 120) -> tuple[list[dict], list[dict], list[dict]]:
+    """L2 的章节切片（§5.2）：(上文, 本章, 下文)。
+
+    本章 = 起点落在 `[start, end)` 的行；上文 / 下文 = 前后各 `pad` 秒内的行，
+    越过整集首尾自然截断（那一段就是空的）。行不切开，**行号照旧是全集的**——
+    模型在切片里看到的第 35 行就是 L1 在整集文本里看到的第 35 行。
+
+    余量只供理解：跨章界的一件事，两章各写自己那一半（ADR 0005）。
+    """
+    return (pick_lines(lines, start_s - pad, start_s),
+            pick_lines(lines, start_s, end_s),
+            pick_lines(lines, end_s, end_s + pad))
+
+
 def format_lines(lines: list[dict], names: dict) -> str:
     """一组行 → §5.2 文本：`行号 [HH:MM:SS] 名字: 文本`，名字只在变化时写
     （这一组的第一行总是写）。"""
