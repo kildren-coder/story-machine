@@ -6,7 +6,7 @@
  "duration_api_ms": 39000,
  "num_turns": 1,
  "stop_reason": "end_turn",
- "result": "```json\n{\n  \"id\": \"opening\",\n  \"title\": \"加更说明\",\n  \"ranges\": [\n    [\n      \"00:00:00\",\n      \"00:01:00\"\n    ]\n  ],\n  \"who\": [\n    \"阿桥\"\n  ],\n  \"paras\": [\n    \"[00:00:00] <who>阿桥</who>说下播后有朋友发来跟大桥收费有关的材料，加更十几分钟。\"\n  ],\n  \"quotes\": [],\n  \"claims\": [],\n  \"channels\": [],\n  \"asr\": []\n}\n```",
+ "result": "```json\n{\n  \"id\": \"opening\",\n  \"title\": \"加更说明\",\n  \"start\": \"00:00:00\",\n  \"end\": \"00:01:00\",\n  \"who\": [\n    \"阿桥\"\n  ],\n  \"paras\": [\n    \"[00:00:00] <who>阿桥</who>说下播后有朋友发来跟大桥收费有关的材料，加更十几分钟。\"\n  ],\n  \"quotes\": [],\n  \"claims\": [],\n  \"channels\": [],\n  \"asr\": []\n}\n```",
  "session_id": "synthetic-fixture-session",
  "total_cost_usd": 0.054,
  "usage": {

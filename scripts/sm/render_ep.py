@@ -23,14 +23,9 @@ ANCHORS = ("<!-- /speakers -->", "<!-- /ep -->")
 
 
 def _span_s(t: dict) -> int:
-    """一个话题所有范围的合计秒数；算不出来的当 0。"""
-    total = 0
-    for r in t.get("ranges") or []:
-        if isinstance(r, list) and len(r) == 2:
-            a, b = parse_hms(r[0]), parse_hms(r[1])
-            if a is not None and b is not None and b > a:
-                total += b - a
-    return total
+    """一个话题的秒数；算不出来的当 0。`end` 是 L1 用下一个话题的起点推出来的。"""
+    a, b = parse_hms(t.get("start")), parse_hms(t.get("end"))
+    return b - a if a is not None and b is not None and b > a else 0
 
 
 def render_outline(topics: list[dict], version: str, now: str) -> str:
@@ -52,13 +47,9 @@ def render_outline(topics: list[dict], version: str, now: str) -> str:
         "",
     ]
     for t in shown:
-        ranges = [r for r in (t.get("ranges") or []) if isinstance(r, list) and len(r) == 2]
-        first = ranges[0][0] if ranges else "00:00:00"
+        # 时间戳写成裸 [HH:MM:SS]，跳播插件才认（ADR 0001）
         aside = " · 旁白" if t.get("kind") == "aside" else ""
-        out.append(f"### [{first}] {t.get('title', '')}{aside}")
-        if len(ranges) > 1:
-            # 时间戳写成裸 [HH:MM:SS]，跳播插件才认（ADR 0001）
-            out.append("范围 " + "、".join(f"[{a}]–[{b}]" for a, b in ranges))
+        out.append(f"### [{t.get('start', '00:00:00')}] {t.get('title', '')}{aside}")
         out += ["", str(t.get("gist") or ""), ""]
     return "\n".join(out).rstrip("\n") + "\n"
 

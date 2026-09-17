@@ -45,7 +45,7 @@ def test_passing_check_returns_object(tmp_path):
     runner = FakeRunner(RAW)
     obj, _, errors = call_layer(paths, runner, "EP91", "L1", "all", "p.md", "x",
                                 lambda o: [], log=lambda m: None)
-    assert errors == [] and obj["ep"] == "EP91"
+    assert errors == [] and obj["topics"][0]["id"] == "opening"
     assert len(runner.calls) == 1
     assert not (paths.failed("EP91") / "L1-all.failed.json").exists()
 
@@ -69,7 +69,7 @@ def test_replay_runner_reads_pairs_and_keeps_the_archive(tmp_path):
 
     obj, _, errors = call_layer(paths, ReplayRunner(tmp_path / "_pairs"), "EP91", "L1",
                                "all", "p.md", "别写进去", lambda o: [], log=lambda m: None)
-    assert errors == [] and obj["ep"] == "EP91"
+    assert errors == [] and obj["topics"][0]["id"] == "opening"
     assert (pairs / "L1-all.raw.json").read_bytes() == before
     assert not (pairs / "L1-all.in.md").exists()
 
@@ -77,7 +77,7 @@ def test_replay_runner_reads_pairs_and_keeps_the_archive(tmp_path):
 def test_extract_json_shapes():
     """验收 8 后半：围栏、带前言都能取；纯散文抛 ValueError。"""
     fenced = json.loads((RAW / "EP91" / "L1-all.raw.json").read_bytes().decode("utf-8"))
-    assert extract_json(fenced["result"])["ep"] == "EP91"
+    assert extract_json(fenced["result"])["topics"][0]["id"] == "opening"
 
     prose = json.loads((RAW_BAD / "EP91" / "L2-qa.raw.json").read_bytes().decode("utf-8"))
     with pytest.raises(ValueError):
@@ -132,24 +132,25 @@ def test_retry_carries_the_previous_errors(tmp_path):
     一模一样。而每掷一次要把三小时逐字稿重发一遍，约 2% 的 5h 额度。
     """
     paths = VaultPaths(tmp_path)
-    runner = ScriptedRunner(['{"ep": "坏的"}', '{"ep": "EP91"}'])
+    runner = ScriptedRunner(['{"ok": false}', '{"ok": true}'])
 
     def check(obj):
-        if obj.get("ep") == "EP91":
+        if obj.get("ok"):
             return []
-        return ["顶层 `ep` = '坏的'，应该是 'EP91'", "范围起点不早于终点：03:09:00-03:09:00"]
+        return ["t3: `start` = '00:22:07' 不是逐字稿里出现过的行首时间戳",
+                "t7: `id` 重复"]
 
     obj, _, errors = call_layer(paths, runner, "EP91", "L1", "all", "p.md",
                                 "逐字稿正文", check, log=lambda m: None)
-    assert errors == [] and obj["ep"] == "EP91"
+    assert errors == [] and obj["ok"] is True
     assert len(runner.inputs) == 2
 
     first, second = runner.inputs
     assert first == "逐字稿正文"                       # 第一趟一个字不多
     assert second.startswith("逐字稿正文")              # 原材料照旧在最前面
     assert "上面这份输出没通过检查" in second
-    assert "顶层 `ep` = '坏的'，应该是 'EP91'" in second
-    assert "范围起点不早于终点：03:09:00-03:09:00" in second
+    assert "不是逐字稿里出现过的行首时间戳" in second
+    assert "t7: `id` 重复" in second
 
 
 def test_retry_carries_the_previous_output_too(tmp_path):

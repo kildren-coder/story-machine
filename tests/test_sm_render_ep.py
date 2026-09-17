@@ -16,7 +16,7 @@ NOW = "2026-03-12T23:10:00+08:00"
 
 def topic(tid, kind, a, b, title=None):
     return {"id": tid, "kind": kind, "title": title or tid,
-            "ranges": [[a, b]], "who": ["阿桥"], "gist": f"{tid} 的交接说明"}
+            "start": a, "end": b, "who": ["阿桥"], "gist": f"{tid} 的交接说明"}
 
 
 def test_filler_is_not_rendered_but_is_counted():

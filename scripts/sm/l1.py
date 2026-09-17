@@ -18,9 +18,39 @@ from .transcript import duration_s, render_lines
 LAYER = "L1"
 UNIT = "all"
 ID_RE = re.compile(r"^[a-z0-9-]+$")
+LINE_RE = re.compile(r"^\[(\d\d:\d\d:\d\d)\]", re.M)
 KINDS = ("talk", "aside", "filler")
-SEAM_S = 5            # 覆盖检查容忍的缝：模型按行首时间戳取整，差几秒是常态
-TOPIC_KEYS = ("id", "title", "kind", "ranges", "who", "gist")
+TOPIC_KEYS = ("id", "title", "kind", "start", "who", "gist")
+
+
+def line_starts(input_text: str) -> list[str]:
+    """输入里所有行首时间戳，按出现顺序。话题的 `start` 只能从这里面取。
+
+    从**实际发出去的那份文本**里数，不另算一遍：另算会跟 render_lines 的分行
+    规则悄悄走岔，把模型老实照抄来的时间戳判成非法。
+    """
+    return LINE_RE.findall(input_text)
+
+
+def nearest_start(value, starts: list[str]) -> str | None:
+    """离 `value` 最近的那个行首时间戳；`value` 连时刻都算不出来就返回 None。"""
+    got = parse_hms(value) if isinstance(value, str) else None
+    if got is None or not starts:
+        return None
+    return min(starts, key=lambda s: abs((parse_hms(s) or 0) - got))
+
+
+def with_ends(topics: list[dict], dur: int) -> list[dict]:
+    """给每个话题补 `end`：下一个话题的 `start`，最后一个收在时长。
+
+    模型只写 `start`，`end` 由代码推——推出来的链天然首尾相接，零长度、倒置、
+    空洞、重叠这几类错误在结构上就不可能发生，不必再靠闸门事后抓。
+    """
+    out = []
+    for i, t in enumerate(topics):
+        end = topics[i + 1].get("start") if i + 1 < len(topics) else hms(dur)
+        out.append({**t, "end": end})
+    return out
 
 
 def head_block(ep: str, dur: int, names: list[str]) -> str:
@@ -46,23 +76,24 @@ def build_input(ep: str, segments: list[dict], speakers: dict) -> str:
     return head_block(ep, duration_s(segments), names) + "\n---\n" + body
 
 
-def check_topics(obj, dur: int, ep: str | None = None) -> list[str]:
-    """§5.3 的字段与类型 + 覆盖整集。返回人话错误列表，空列表算过。"""
+def check_topics(obj, dur: int, starts: list[str]) -> list[str]:
+    """§5.3 的字段与类型 + 起点照抄行首且递增。返回人话错误列表，空列表算过。
+
+    时间这一侧只剩三条：起点在行首集合里、第一个是第一行、严格递增。三条都由
+    「在换论点那一行把行首时间戳复制下来」一个动作同时满足——模型不用算数，
+    所以算错不了。
+    """
     errs: list[str] = []
     if not isinstance(obj, dict):
         return ["顶层不是对象"]
-    got_ep = obj.get("ep")
-    if not isinstance(got_ep, str) or not got_ep.strip():
-        errs.append("顶层 `ep` 缺失或不是字符串")
-    elif ep and got_ep.strip() != ep:
-        errs.append(f"顶层 `ep` = {got_ep!r}，应该是 {ep!r}")
     topics = obj.get("topics")
     if not isinstance(topics, list) or not topics:
         errs.append("`topics` 不是非空数组")
         return errs
 
+    allowed = set(starts)
     seen: set[str] = set()
-    spans: list[tuple[int, int, str]] = []
+    prev: int | None = None
     for n, t in enumerate(topics, 1):
         tag = (t or {}).get("id") if isinstance(t, dict) else None
         tag = tag if isinstance(tag, str) and tag else f"第{n}个话题"
@@ -98,55 +129,27 @@ def check_topics(obj, dur: int, ep: str | None = None) -> list[str]:
                            or not all(isinstance(w, str) and w.strip() for w in who)):
             errs.append(f"{tag}: `who` 不是字符串数组")
 
-        ranges = t.get("ranges")
-        if "ranges" not in t:
+        if "start" not in t:
             continue
-        if not isinstance(ranges, list) or not ranges:
-            errs.append(f"{tag}: `ranges` 不是非空数组")
+        st = t.get("start")
+        if not isinstance(st, str) or st not in allowed:
+            # 把最近的那个行首一并报出去：差一秒、或者写成 MM:SS 的，看见正确
+            # 答案就能一次改对，不必再赌下一趟
+            near = nearest_start(st, starts)
+            errs.append(f"{tag}: `start` = {st!r} 不是逐字稿里出现过的行首时间戳"
+                        + (f"，最近的一个是 {near}" if near else "")
+                        + "——只能把换论点那一行的 [HH:MM:SS] 照抄下来，不要自己算")
             continue
-        for r in ranges:
-            if not (isinstance(r, list) and len(r) == 2):
-                errs.append(f"{tag}: `ranges` 的元素不是 [起, 止]：{r!r}")
-                continue
-            a, b = parse_hms(r[0]), parse_hms(r[1])
-            if a is None or b is None:
-                errs.append(f"{tag}: 时间戳不是 HH:MM:SS：{r!r}")
-                continue
-            if a >= b:
-                errs.append(f"{tag}: 范围起点不早于终点：{r[0]}–{r[1]}")
-                continue
-            if b > dur:
-                errs.append(f"{tag}: 范围终点 {r[1]} 超过时长 {hms(dur)}")
-                continue
-            spans.append((a, b, tid if isinstance(tid, str) else tag))
+        if n == 1 and st != starts[0]:
+            errs.append(f"第一个话题的 `start` 必须是第一行的 {starts[0]}，"
+                        f"现在是 {st}——整集从头讲起，开头不能漏")
+        cur = parse_hms(st)
+        if prev is not None and cur <= prev:
+            errs.append(f"{tag}: `start` = {st} 不晚于上一个话题的起点 {hms(prev)}"
+                        f"——话题要按时间先后排，一个话题一个起点")
+            continue
+        prev = cur
 
-    errs += check_coverage(spans, dur)
-    return errs
-
-
-def check_coverage(spans: list[tuple[int, int, str]], dur: int) -> list[str]:
-    """排序后从 00:00:00 到时长必须无空洞无重叠（允许 ≤ SEAM_S 秒的缝）。
-
-    空洞的报法带上两头的时间戳：人看到「00:19:00–00:22:00」就知道去听哪一段，
-    而「覆盖不全」只能让人重读整集。
-    """
-    errs: list[str] = []
-    if not spans:
-        return ["没有一个合法的时间范围，覆盖无从检查"]
-    spans = sorted(spans)
-    if spans[0][0] > SEAM_S:
-        errs.append(f"覆盖从 {hms(spans[0][0])} 才开始，00:00:00 起有空洞")
-    for (a0, b0, id0), (a1, b1, id1) in zip(spans, spans[1:]):
-        seam = a1 - b0
-        if seam > SEAM_S:
-            errs.append(f"覆盖有空洞：{hms(b0)}–{hms(a1)}（{seam / 60:.1f} 分钟，"
-                        f"在 {id0} 与 {id1} 之间）")
-        elif seam < -SEAM_S:
-            errs.append(f"覆盖有重叠：{hms(a1)}–{hms(b0)}（{-seam / 60:.1f} 分钟，"
-                        f"{id0} 与 {id1}）")
-    tail = dur - max(b for _, b, _ in spans)
-    if tail > SEAM_S:
-        errs.append(f"覆盖到 {hms(dur - tail)} 就断了，到时长 {hms(dur)} 还有空洞")
     return errs
 
 
@@ -157,14 +160,18 @@ def run_l1(paths, runner, ep: str, segments: list[dict], speakers: dict, prompt:
     """跑 L1 并落 `_digest/EP{n}/topics.json`（带 provenance）。失败返回 (None, 错误)。"""
     dur = duration_s(segments)
     text = build_input(ep, segments, speakers)
+    starts = line_starts(text)
     obj, envelope, errors = call_layer(
         paths, runner, ep, LAYER, UNIT, prompt["path"], text,
-        lambda o: check_topics(o, dur, ep),
+        lambda o: check_topics(o, dur, starts),
         retries=retries, model=model, effort=effort, timeout=timeout, log=log,
         generated_at=generated_at)
     if obj is None:
         return None, errors
 
+    # `ep` 与 `end` 由代码填：模型只写它真正看得出来的东西（起点与内容），
+    # 凡是代码已经知道的一律不问——问了就是白白多一处会错的地方
+    obj = {"ep": ep, "topics": with_ends(obj["topics"], dur)}
     obj["provenance"] = provenance(
         derived_from=[f"{ep}.transcript.json"], layer=LAYER, unit=UNIT,
         engine=engine_of(envelope, model), effort=effort,

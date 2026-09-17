@@ -50,15 +50,13 @@ def test_ep91_end_to_end(vault):
     assert re.search(r"<!-- /speakers -->\s*<!-- digest:auto -->", text)
     block = block_of(text)
     heads = HEAD_RE.findall(block)
-    assert len(heads) == 4
-    assert [h[0] for h in heads] == [t["ranges"][0][0] for t in want["topics"]]
+    assert len(heads) == 5
+    assert [h[0] for h in heads] == [t["start"] for t in want["topics"]]
     assert [h[1] for h in heads] == ["开场与设备测试 · 旁白",
                                      "北港大桥收费方案：十五块还是十二块",
                                      "河口夜市搬迁：消防倒逼下的选择",
+                                     "回到大桥：货车费率与浮桥",
                                      "结尾弹幕与下周预告 · 旁白"]
-    # 大桥那条两段范围都列出来
-    assert "范围 [00:03:30]–[00:19:00]、[00:36:00]–[00:41:30]" in block
-    assert block.count("范围 ") == 1
 
     fm = read_frontmatter(text)
     assert fm["整理"] == "done"
@@ -123,7 +121,7 @@ def test_rerun_keeps_the_generated_at_from_the_product(vault):
 
 
 def test_bad_l1_goes_to_failed(vault):
-    """验收 4：覆盖空洞 + 缺 kind → `_failed/`、整理: failed、无块、退出码 1。"""
+    """验收 4：起点不是行首 + 缺 kind → `_failed/`、整理: failed、无块、退出码 1。"""
     runner = FakeRunner(RAW_BAD)
     assert run_ep(vault, "EP91", runner) == 1
     assert len(runner.calls) == 2                      # 默认 retries=1
@@ -131,7 +129,7 @@ def test_bad_l1_goes_to_failed(vault):
     failed = vault / "_failed" / "EP91" / "L1-all.failed.json"
     assert failed.exists()
     errs = "\n".join(json.loads(failed.read_bytes().decode("utf-8"))["errors"])
-    assert "00:19:00" in errs and "空洞" in errs        # 夜市话题晚开始 3 分钟
+    assert "00:22:07" in errs and "行首时间戳" in errs   # 夜市的起点是自己算的
     assert "缺字段" in errs and "kind" in errs          # qa 话题没有 kind
     assert not (vault / "_digest" / "EP91" / "topics.json").exists()
 
@@ -184,7 +182,7 @@ def test_stdout_says_each_step_and_no_content(vault, capsys):
     """红线 6：日志只报步骤与计数，不把话题标题 / gist 打到终端。"""
     assert run_ep(vault, "EP91", FakeRunner(RAW)) == 0
     out = capsys.readouterr().out
-    assert "L1 骨架" in out and "L1 通过：4 个话题" in out
+    assert "L1 骨架" in out and "L1 通过：5 个话题" in out
     assert "整理: done" in out
     assert "北港大桥收费方案" not in out
     assert "晚报报道搬滨江路" not in out
