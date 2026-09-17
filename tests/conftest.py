@@ -17,9 +17,13 @@ FIX = REPO / "tests" / "fixtures"
 RAW = FIX / "raw"
 RAW_BAD = FIX / "raw-bad"
 NOW = "2026-03-12T23:10:00+08:00"          # 固定时钟：重跑要逐字节一致
-VERSION = "L1-skeleton@0.1"
 
 sys.path.insert(0, str(REPO / "scripts"))
+
+from sm.prov import read_prompt                                    # noqa: E402
+
+# 打磨期 prompt 版本一天能升几次（#57），钉死在这里只会逼人跟着改测试
+VERSION = read_prompt(REPO / "prompts" / "L1-skeleton.md")["version"]
 
 
 @pytest.fixture

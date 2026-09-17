@@ -14,6 +14,7 @@ import re
 from pathlib import Path
 
 from .note import read_note, set_frontmatter, write_note
+from .text import hms, parse_hms
 
 BLOCK_START = "<!-- digest:auto -->"
 BLOCK_END = "<!-- /digest -->"
@@ -21,16 +22,36 @@ BLOCK_RE = re.compile(re.escape(BLOCK_START) + r".*?" + re.escape(BLOCK_END), re
 ANCHORS = ("<!-- /speakers -->", "<!-- /ep -->")
 
 
+def _span_s(t: dict) -> int:
+    """一个话题所有范围的合计秒数；算不出来的当 0。"""
+    total = 0
+    for r in t.get("ranges") or []:
+        if isinstance(r, list) and len(r) == 2:
+            a, b = parse_hms(r[0]), parse_hms(r[1])
+            if a is not None and b is not None and b > a:
+                total += b - a
+    return total
+
+
 def render_outline(topics: list[dict], version: str, now: str) -> str:
-    """`## 整理稿` 那一块的正文（不含标记行，标记由 write_into_note 加）。"""
+    """`## 整理稿` 那一块的正文（不含标记行，标记由 write_into_note 加）。
+
+    `filler`（答谢礼物、设备测试、纯口播）不渲染：它们没有信息量，占着阅读面
+    只会稀释正题。但**段数与合计时长要报出来**——不报的话模型把正题误判成
+    `filler`，人在笔记上永远看不见（红线 2 不删事）。
+    """
+    shown = [t for t in topics if t.get("kind") != "filler"]
+    dropped = [t for t in topics if t.get("kind") == "filler"]
+    tail = (f"；另有 {len(dropped)} 段杂项未渲染（合计 {hms(sum(_span_s(t) for t in dropped))}）"
+            if dropped else "")
     out = [
         "## 整理稿",
         "",
         f"> [!info] 本块由 L3 渲染（整理版本 {version}，生成于 {now}）；"
-        f"重跑会覆盖，批注请写在块外。",
+        f"重跑会覆盖，批注请写在块外{tail}。",
         "",
     ]
-    for t in topics:
+    for t in shown:
         ranges = [r for r in (t.get("ranges") or []) if isinstance(r, list) and len(r) == 2]
         first = ranges[0][0] if ranges else "00:00:00"
         aside = " · 旁白" if t.get("kind") == "aside" else ""

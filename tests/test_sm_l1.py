@@ -90,13 +90,15 @@ def test_wrong_ep_and_shape():
 
 
 def test_prompt_version_and_schema_in_body():
-    """验收 12：首行版本号形状 + 正文写清六个键与两种 kind。"""
+    """验收 12：首行版本号形状 + 正文写清六个键与三档 kind。"""
     text = PROMPT.read_bytes().decode("utf-8")
     first = text.splitlines()[0]
     assert re.match(r"^version: L1-skeleton@\d+\.\d+$", first)
-    for key in ("id", "title", "kind", "ranges", "who", "gist", "talk", "aside"):
+    for key in ("id", "title", "kind", "ranges", "who", "gist",
+                "talk", "aside", "filler"):
         assert key in text, key
-    assert read_prompt(PROMPT)["version"] == "L1-skeleton@0.1"
+    # 版本号不钉死：打磨期它每改一版就升一次（#57），钉死只会逼人改测试
+    assert read_prompt(PROMPT)["version"] == first.split(": ", 1)[1]
     assert len(read_prompt(PROMPT)["sha8"]) == 8
 
 

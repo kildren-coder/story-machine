@@ -18,7 +18,7 @@ from .transcript import duration_s, render_lines
 LAYER = "L1"
 UNIT = "all"
 ID_RE = re.compile(r"^[a-z0-9-]+$")
-KINDS = ("talk", "aside")
+KINDS = ("talk", "aside", "filler")
 SEAM_S = 5            # 覆盖检查容忍的缝：模型按行首时间戳取整，差几秒是常态
 TOPIC_KEYS = ("id", "title", "kind", "ranges", "who", "gist")
 
