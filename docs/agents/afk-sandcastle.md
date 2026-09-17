@@ -208,7 +208,7 @@ npm run afk '--' --quota         # 只打印当前额度判定，不跑活
   的标准不属于 AFK 票——那是合并后人在交互式会话里做的事，写进票的「真实样例
   验证」一节即可，不算验收标准。
 - **Fixture check（出题时逐票必问）**：这张票的正确性是否取决于输入数据的形状
-  （逐字稿 JSON 的字段、`topics.json` / `frag-*.json` 的结构、EP 笔记
+  （逐字稿 JSON 的字段、`chapters.json` / `topics.json` / `frag-*.json` 的结构、EP 笔记
   frontmatter）？是——出题时把一份**合成的**样例放进 `tests/fixtures/`（结构照
   SPEC §5，内容自己编，**绝不能是真实转写的片段**，红线 10），并在验收标准里
   引用它；样例没落库前不得打 `ready-for-agent`。沙箱里没有 vault，agent 造不出
