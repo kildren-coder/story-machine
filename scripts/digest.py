@@ -126,8 +126,12 @@ def cmd_ep(args) -> int:
             return 1
         log(f"L1 通过：{len(obj.get('topics') or [])} 个话题 → {paths.rel(topics_path)}")
 
-    version = (obj.get("provenance") or {}).get("prompt_version") or prompt["version"]
-    block = render_outline(obj.get("topics") or [], version, now)
+    prov = obj.get("provenance") or {}
+    version = prov.get("prompt_version") or prompt["version"]
+    # 块首行那个时间说的是「这份话题表什么时候生成的」，取产物自己记的那个：跳过
+    # L1 重渲染时用当下，笔记每跑一次就变一次（Obsidian 记一条新版本、同步重传）
+    block = render_outline(obj.get("topics") or [], version,
+                           prov.get("generated_at") or now)
     missed = write_into_note(note, block, "done", version)
     if missed:
         log(f"⚠ 笔记没有 frontmatter，{'、'.join(missed)} 没写进去")

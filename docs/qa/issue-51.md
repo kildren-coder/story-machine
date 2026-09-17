@@ -26,9 +26,11 @@
    笔记那行是人看的、可能被改过；覆盖检查必须跟模型看到的那份文本对得上。
    （EP91 2559.6s → `00:42:40`，与笔记一致，`test_duration_comes_from_the_last_segment`
    把两者钉在一起。）
-2. **`整理版本:` 取 `topics.json` 的 `provenance.prompt_version`**，产物缺
-   provenance 时退回当前 prompt 的版本。跳过 L1 重渲染时写的是当初生成它的那个
-   版本——不是现在磁盘上的 prompt 版本。
+2. **`整理版本:` 与块首行的生成时间都取 `topics.json` 的 `provenance`**
+   （`prompt_version` / `generated_at`），产物缺 provenance 时退回当前 prompt 版本
+   与当下。跳过 L1 重渲染时写的是当初生成它的那个版本与那个时刻——不是现在磁盘上的
+   prompt 版本、也不是此刻。于是产物没重生成时，重跑多少次笔记都逐字节不变
+   （`test_rerun_keeps_the_generated_at_from_the_product`）。
 3. **`_pairs/` 是永久正本**：`ReplayRunner` 带 `replay = True`，`call_layer` 见到它
    就不重写 `.in.md` / `.raw.json`。（`--replay` 开关本票不接，归 #55；类已就位。）
 

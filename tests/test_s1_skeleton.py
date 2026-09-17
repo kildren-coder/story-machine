@@ -100,6 +100,28 @@ def test_rerun_skips_l1_and_force_recalls(vault):
     assert note_text(vault, "EP91") == first           # 同一份响应 + 固定时钟
 
 
+def test_rerun_keeps_the_generated_at_from_the_product(vault):
+    """块首行那个时间来自产物的 provenance，不是渲染时刻。
+
+    取当下的话，每跑一次 `-Extract`（哪怕 L1 跳过了）笔记都变一次：Obsidian 记
+    一条新版本、同步重传；那个时间的含义也从「这份话题表什么时候生成的」滑成
+    「上次渲染于」，改了 prompt 想回头对比就没依据了。
+    """
+    runner = FakeRunner(RAW)
+    assert run_ep(vault, "EP91", runner) == 0
+    first = note_text(vault, "EP91")
+    assert f"生成于 {NOW}" in first
+
+    topics = json.loads(
+        (vault / "_digest" / "EP91" / "topics.json").read_bytes().decode("utf-8"))
+    assert topics["provenance"]["generated_at"] == NOW
+
+    # 半天之后再跑：L1 跳过，笔记必须逐字节不变
+    assert run_ep(vault, "EP91", runner, now="2026-03-13T11:30:00+08:00") == 0
+    assert len(runner.calls) == 1
+    assert note_text(vault, "EP91") == first
+
+
 def test_bad_l1_goes_to_failed(vault):
     """验收 4：覆盖空洞 + 缺 kind → `_failed/`、整理: failed、无块、退出码 1。"""
     runner = FakeRunner(RAW_BAD)
