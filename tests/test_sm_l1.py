@@ -14,7 +14,7 @@ from __future__ import annotations
 import re
 
 from conftest import REPO
-from sm.l1 import build_input, check_topics, out_of_order, read_start, with_ends
+from sm.l1 import build_input, check_topics, out_of_order, read_start, tidy, with_ends
 from sm.prov import read_prompt
 
 PROMPT = REPO / "prompts" / "L1-skeleton.md"
@@ -115,6 +115,20 @@ def test_field_and_type_errors():
     e = errs(obj)
     assert "^[a-z0-9-]+$" in e and "`kind`" in e and "`who` 不是字符串数组" in e
     assert "缺字段 `gist`" in e
+
+
+def test_an_id_with_a_capital_letter_is_lowercased_not_rejected():
+    """haiku 写过 `eric-Adams-mandela`。`id` 是机器键不是人读的字，一个大写字母
+    不该让整集重发一趟；归一完还不合规的（中文、标点）照样拦。"""
+    obj = topics("00:00:00", "00:05:00")
+    obj["topics"][0]["id"] = "eric-Adams mandela"
+    obj["topics"][1]["id"] = "Bridge_Toll"
+    tidied = tidy(obj)
+    assert [t["id"] for t in tidied["topics"]] == ["eric-adams-mandela", "bridge-toll"]
+    assert check_topics(tidied, DUR) == []
+    assert obj["topics"][0]["id"] == "eric-Adams mandela"          # 不改原对象
+    obj["topics"][0]["id"] = "大桥"
+    assert "不匹配" in "\n".join(check_topics(tidy(obj), DUR))
 
 
 def test_duplicate_id():

@@ -103,6 +103,24 @@ def build_input(ep: str, segments: list[dict], speakers: dict) -> str:
     return head_block(ep, duration_s(segments), names) + "\n---\n" + body
 
 
+def tidy(obj):
+    """机械归一，不碰内容：`id` 转小写、下划线与空格换成短横线。
+
+    `id` 是机器键，不是人读的字（红线 2 管的是标题、gist、原话）。haiku 写过
+    `eric-Adams-mandela`，一个大写字母就让整集重发一趟，不值。归一完还不合规
+    的照样由 check_topics 拦。检查前与落盘前都过一遍，两头看到的是同一份。
+    """
+    if not isinstance(obj, dict) or not isinstance(obj.get("topics"), list):
+        return obj
+    out = []
+    for t in obj["topics"]:
+        if isinstance(t, dict) and isinstance(t.get("id"), str):
+            tid = re.sub(r"[\s_]+", "-", t["id"].strip().lower())
+            t = {**t, "id": tid}
+        out.append(t)
+    return {**obj, "topics": out}
+
+
 def check_topics(obj, dur: int) -> list[str]:
     """§5.3 的字段与类型 + 起点能读出来、落在集内。空列表算过。
 
@@ -179,11 +197,12 @@ def run_l1(paths, runner, ep: str, segments: list[dict], speakers: dict, prompt:
     text = build_input(ep, segments, speakers)
     obj, envelope, errors = call_layer(
         paths, runner, ep, LAYER, UNIT, prompt["path"], text,
-        lambda o: check_topics(o, dur),
+        lambda o: check_topics(tidy(o), dur),
         retries=retries, model=model, effort=effort, timeout=timeout, log=log,
         generated_at=generated_at)
     if obj is None:
         return None, errors
+    obj = tidy(obj)
 
     # `ep` 与 `end` 由代码填：模型只写它真正看得出来的东西（起点与内容），
     # 凡是代码已经知道的一律不问——问了就是白白多一处会错的地方

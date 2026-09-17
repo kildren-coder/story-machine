@@ -117,6 +117,16 @@ def test_a_stray_quote_in_a_value_is_escaped_not_rejected():
         extract_json('{"gist": "开了引号没关')
 
 
+def test_a_fullwidth_or_missing_comma_between_objects_is_mended():
+    """haiku/high 在 EP01 上把两个话题之间的逗号写成了全角 `}，{`。这个字符在
+    字符串外面，换成半角不碰任何内容；漏写逗号同理补上。"""
+    obj = extract_json('{"topics": [{"id": "a", "gist": "一，二"}，{"id": "b", "gist": "三"}]}')
+    assert [t["id"] for t in obj["topics"]] == ["a", "b"]
+    assert obj["topics"][0]["gist"] == "一，二"                    # 字符串里的全角逗号不动
+    obj = extract_json('{"topics": [{"id": "a"}\n  {"id": "b"}]}')
+    assert [t["id"] for t in obj["topics"]] == ["a", "b"]
+
+
 def test_provenance_keys_are_spec_9():
     """验收 9：字段集合 == §9。"""
     p = provenance(["EP91.transcript.json"], "L1", "all", "claude-sonnet-5", "low",

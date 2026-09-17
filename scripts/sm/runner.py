@@ -165,9 +165,21 @@ def _loads_repairing(text: str) -> dict:
             if e.pos <= last_pos:
                 raise ValueError(f"JSON 修不好：{e.msg}（第 {e.lineno} 行）") from e
             last_pos = e.pos
-            if e.msg.startswith("Invalid \\escape") and e.pos < len(text) and text[e.pos] == "\\":
+            here = text[e.pos] if e.pos < len(text) else ""
+            if e.msg.startswith("Invalid \\escape") and here == "\\":
                 text = text[:e.pos] + "\\\\" + text[e.pos + 1:]
                 continue
+            prev = text[:e.pos].rstrip()[-1:]
+            if e.msg.startswith("Expecting ',' delimiter") and prev in "}]":
+                # 紧跟在 } 或 ] 后面的才算结构位置：对象之间写了全角逗号（haiku
+                # 写过 `}，{`）或干脆漏了逗号——都在字符串外面，改它不碰内容。
+                # 跟在引号后面的不算：那多半是野引号把字符串提前截断了
+                if here == "，":
+                    text = text[:e.pos] + "," + text[e.pos + 1:]
+                    continue
+                if here in "{[":
+                    text = text[:e.pos] + "," + text[e.pos:]
+                    continue
             q = text.rfind('"', 0, e.pos)
             if q <= 0:
                 raise ValueError(f"JSON 修不好：{e.msg}（第 {e.lineno} 行）") from e
