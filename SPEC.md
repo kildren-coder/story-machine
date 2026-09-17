@@ -121,6 +121,7 @@ L7      渲染      纯代码 ──► 日报 + 事件笔记 + 跨 UP 对照
 - prompt 带版本号（文件首行 `version:`），产物 provenance 记 `prompt_version`。每层以 EP02 为 golden 样例。
 - 不联网的层（L1、L2、L4、L6）不得引入逐字稿以外的事实；联网的层（L5a、L5b）每条判断必带链接。
 - 单元命名：L1 与 L4、L6 的单元是 `all`，L2 的单元是话题 `id`，L5 的单元是事件 `id`。
+- 各层共用的机械件在 `scripts/sm/`：文本与时间戳、EP 笔记读写、vault 路径、逐字稿渲染（§5.1 → §5.2）、runner 三形态、三份留档与 `_failed/`、provenance。
 - 文件位置：解析后产物 `_digest/EP{n}/topics.json`、`_digest/EP{n}/frag-<topic>.json`、`_digest/EP{n}/gates.json`、`_digest/{date}/events.json`、`_digest/{date}/check-<event>.json`；原样输入与原始响应 `_pairs/EP{n}/L1-all.in.md` / `.raw.json`、`_pairs/EP{n}/L2-<topic>.in.md` / `.raw.json`、`_pairs/{date}/L4-all.in.md` / `.raw.json`（L5a/L5b 为 `L5a-<event>` / `L5b-<event>`，L6 为 `L6-all`）；不过 schema 的单元 `_failed/EP{n}/<层>-<单元>.failed.json` 或 `_failed/{date}/…`。
 - JSON 产物的 provenance 是顶层 `provenance` 对象（§9），schema 检查忽略该键。
 - 调用走同一个 runner 接口，三种实现：真实 `claude -p`；`--replay`（读 `_pairs/` 里的 `.raw.json`）；测试用假 runner（读 `tests/fixtures/raw/<EP 或日期>/<层>-<单元>.raw.json`，缺键报错不静默）。原始响应信封按 `--output-format json` 的形状，解析时取 `result` 里的 JSON（允许围栏与前言）。
@@ -128,9 +129,11 @@ L7      渲染      纯代码 ──► 日报 + 事件笔记 + 跨 UP 对照
 
 ### L1 骨架：整集 → 话题表
 
-- 输入：整集逐字稿，§5.2 格式。
+- 输入：整集逐字稿，§5.2 格式，前面加一行头（`episode`、时长、说话人）。整集时长取逐字稿最后一段的 `end` 取整秒。
+- prompt：`prompts/L1-skeleton.md`。
 - 输出：`topics.json`（§5.3）。
 - 规则：话题以「一个标题能概括、10 到 25 分钟」为粒度；开场白、观众问答、口播照列，标 `aside`；时间范围覆盖整集不留空洞（代码检查）。
+- 代码检查：§5.3 的字段与类型；`id` 匹配 `^[a-z0-9-]+$` 且全集唯一；范围起点早于终点且落在 `[00:00:00, 时长]`；排序后从 `00:00:00` 到时长无空洞无重叠，允许 ≤ 5 秒的缝。不过按 §4.1 重试后进 `_failed/`。
 - sonnet / low。
 
 ### L2 逐话题整理：切片 → 片段
@@ -195,7 +198,8 @@ L7      渲染      纯代码 ──► 日报 + 事件笔记 + 跨 UP 对照
 - 关注列表 `_pipeline/关注.md`：一行一个 UP 主空间链接；worker 每天扫新投稿与录播入队（里程碑 5 前手动粘链接）。
 - 日报日期 = 内容发布日；当天无新内容不出日报。
 - 队列状态机只管阶段 0；L1 到 L7 的状态是产物文件与 EP 笔记的 `整理:` 字段，不进队列（ADR 0002 补记）。
-- 单集入口 `worker.ps1 -Extract EP{n}`（转交 `scripts/digest.py ep EP{n}`）跑 L1 到 L3；日级入口 `worker.ps1 -Digest <date>`（转交 `scripts/digest.py day <date>`）对 `播出日期` 等于该日的各集补齐 L1 到 L3 后跑 L4 到 L7。两者都由人触发。
+- 单集入口 `worker.ps1 -Extract EP{n}`（转交 `scripts/digest.py ep EP{n} --vault <vault>`，`-Redo` → `--force`）跑 L1 到 L3；日级入口 `worker.ps1 -Digest <date>`（转交 `scripts/digest.py day <date>`）对 `播出日期` 等于该日的各集补齐 L1 到 L3 后跑 L4 到 L7。两者都由人触发。
+- `digest.py` 的退出码：0 跑完 / 1 有单元进 `_failed/`（EP 笔记 `整理:` 置 `failed`，不渲染）/ 2 输入缺失（逐字稿、EP 笔记、prompt）。EP 笔记按文件名以 `EP{n} ` 开头或 frontmatter `episode` 等于 `EP{n}` 找。
 
 ---
 
@@ -306,7 +310,9 @@ pipeline_version: v3.0
 | 信源 | 类型 | 谁提到 | 时间戳 | 原话 |
 ```
 
-**单集整理稿**渲染在 EP 笔记 `## 整理稿` 下：按话题顺序放 `paras`、原话锚点、可核查的说法、提到的信源、疑似 ASR 生音；时间戳用裸 `[HH:MM:SS]`。整理稿连同 `## 整理稿` 标题写在 `<!-- digest:auto -->` … `<!-- /digest -->` 标记块内：首次插在 `<!-- /speakers -->` 之后（没有则 `<!-- /ep -->` 之后，再没有则文末）；已存在则整块替换；块外字节不动。frontmatter 只写 `整理:` 与 `整理版本:` 两个键，没有则新增，其他键与顺序不动。
+**单集整理稿**渲染在 EP 笔记 `## 整理稿` 下：按话题顺序放 `paras`、原话锚点、可核查的说法、提到的信源、疑似 ASR 生音；时间戳用裸 `[HH:MM:SS]`。整理稿连同 `## 整理稿` 标题写在 `<!-- digest:auto -->` … `<!-- /digest -->` 标记块内：首次插在 `<!-- /speakers -->` 之后（没有则 `<!-- /ep -->` 之后，再没有则文末）；已存在则整块替换；块外字节不动。块内第一行写明「本块由 L3 渲染（整理版本、生成时间）；重跑会覆盖，批注请写在块外」。frontmatter 只写 `整理:` 与 `整理版本:` 两个键，没有则新增在末尾，其他键与顺序不动；`整理版本:` 取渲染所依据那一层的 prompt 版本。
+
+L2 上线前整理稿的形状：只有话题大纲——每话题一行 `### [HH:MM:SS] 标题`（时间戳是该话题第一段范围的起点，多段范围在下一行列全部，`aside` 的标题后加「· 旁白」），下面一行 `gist`。
 
 L5 / L6 上线前日报的形状：导语位置写固定一行「（导语：待 L6）」；事件卡只有「讲了什么」小节，其余四问与核查台账不渲染；跨 UP 对照表照拼（单 UP 时只有一列）。事件笔记不存在时由 L7 按 §5.8 模板新建（「我的判断」为空节）。
 
