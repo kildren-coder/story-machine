@@ -4,10 +4,10 @@
 `check_topics` 是红线 9 的入口：它判不过的单元会被拦进 `_failed/`，所以它宁可
 啰嗦也不能放水；但它**只判形状**，一个字都不许改（红线 2）。
 
-时间这一侧只剩两条检查——起点不超过时长、一个比一个晚。零长度、倒置、空洞、
-重叠、越界这五类曾经最常见的错误已经**在结构上不可能发生**：模型不再写终点，
-终点由 `with_ends` 接上。格式松紧由 `read_start` 兜住，首个起点由 `with_ends`
-归零，都不打回重跑。
+时间这一侧只剩两条检查——起点不超过时长、不往回走。倒置、空洞、重叠、越界
+这几类曾经最常见的错误已经**在结构上不可能发生**：模型不再写终点，终点由
+`with_ends` 接上。格式松紧由 `read_start` 兜住，首个起点由 `with_ends` 归零，
+两个话题起点相同也算过，都不打回重跑。
 """
 from __future__ import annotations
 
@@ -58,10 +58,21 @@ def test_a_start_past_the_duration_is_rejected():
     assert "超过整集时长" in errs(topics("00:00:00", "00:11:00"))
 
 
-def test_starts_must_strictly_increase():
-    assert "不晚于上一个话题的起点" in errs(topics("00:00:00", "00:05:00", "00:02:00"))
-    # 两个话题共用一个起点也是不递增：那样推出来的话题长度会是 0
-    assert "不晚于上一个话题的起点" in errs(topics("00:00:00", "00:05:00", "00:05:00"))
+def test_starts_must_not_go_backwards():
+    assert "早于上一个话题的起点" in errs(topics("00:00:00", "00:05:00", "00:02:00"))
+
+
+def test_two_topics_on_one_line_may_share_a_start():
+    """起点制以来 8 轮里 3 轮写了两个一样的起点（EP01 的 00:32:41、EP03 的
+    00:00:33）：两件事挤在同一行里，行首每 30 秒才一个，它没有别的时刻可写。
+    这不是它写错，打回只会白烧一趟。前一个话题长度为 0，链条照样闭合。"""
+    obj = topics("00:00:00", "00:05:00", "00:05:00", "00:08:00")
+    assert check_topics(obj, DUR) == []
+    ts = with_ends(obj["topics"], DUR)
+    assert (ts[1]["start"], ts[1]["end"]) == ("00:05:00", "00:05:00")
+    assert (ts[2]["start"], ts[2]["end"]) == ("00:05:00", "00:08:00")
+    for a, b in zip(ts, ts[1:]):
+        assert a["end"] == b["start"]
 
 
 def test_ends_are_derived_so_the_chain_can_never_break():
@@ -74,7 +85,7 @@ def test_ends_are_derived_so_the_chain_can_never_break():
     assert [t["end"] for t in ts] == ["00:05:00", "00:07:30", "00:10:00"]
     for a, b in zip(ts, ts[1:]):
         assert a["end"] == b["start"]                  # 缝永远是 0
-    assert all(t["start"] < t["end"] for t in ts)      # 零长度不可能
+    assert all(t["start"] < t["end"] for t in ts)      # 起点各不相同时没有零长度
 
 
 def test_with_ends_normalises_the_head_and_the_format():
@@ -125,6 +136,8 @@ def test_prompt_does_not_ask_for_what_the_code_already_knows():
     text = PROMPT.read_bytes().decode("utf-8")
     assert "只写起点，不写终点" in text
     assert "ranges" not in text
+    # 「不能写同一个时刻」这条禁令模型照样违反，只会让它二选一丢掉一个话题
+    assert "不能写同一个时刻" not in text
 
 
 def test_title_that_would_break_the_marker_block():
