@@ -1,8 +1,8 @@
 # QA — issue #52 逐章节整理：L2 按章切片、章内切话题 → EP 笔记里出现整理稿
 
-分支 `agent/issue-52`。沙箱内 `bash scripts/test.sh` 全绿（107 个 pytest 用例，
-本票新增 42 个），没有调用过 `claude -p`，没有碰过 vault，所有用例跑在
-`tests/fixtures/vault/` 的临时副本上。
+分支 `agent/issue-52`。沙箱内 `bash scripts/test.sh` 全绿（108 个 pytest 用例，
+本票新增 43 个，含评审补的 1 个），没有调用过 `claude -p`，没有碰过 vault，所有
+用例跑在 `tests/fixtures/vault/` 的临时副本上。
 
 ---
 
@@ -34,6 +34,19 @@
    过」的判据；直接 `write_bytes` 中间那一小段文件是截断的。并发用例里 worker
    就在那一刻读到过半份 JSON（对照实验：300 次重写，直接写法下读到半份 1023 次，
    `os.replace` 之后 0 次）。跑到一半被杀再重跑会踩到同一个坑。
+
+评审阶段又逮到第四个（已修、配了用例
+`test_s2_topics.py::test_a_stale_topic_table_cannot_stand_in_for_the_chapter_that_just_failed`）：
+
+4. **这一趟一章都没写成时，`run_l2` 会拿盘上那份旧话题表当完成的凭据。**
+   「片段写了一半被杀」（frag 没了、话题表还记着它）之后重跑，那一章又没过：
+   `done` 里没有它，可 `doc` 回退去读了上一趟的 `topics.json`，里面有它的旧话题。
+   `digest.py` 照着算「每一章都完成」→ 渲染。实测复现：正题那一节在笔记上变成一个
+   **空标题**（15 分钟的内容整段消失），frontmatter 照旧写 `整理: done`、退出码 0，
+   `_failed/EP91/L2-bridge.failed.json` 躺在那儿但人唯一会读的那一面上看不出来
+   （红线 9；`--force` 下两章全挂时整块四节全空）。现在这条回退路径只认这一趟真
+   拿到片段的章，全跳过的那种情况一个都不会滤掉、`topics.json` 也不重写，笔记照旧
+   逐字节不变。
 
 契约层面值得单独看的四处决定：
 
@@ -147,7 +160,7 @@ frontmatter 其他键一个字节没动。
 | 2 | 红线 5：块内每段还原 `**名**` / `<u>` 后与片段的 `paras` 逐字相等（13 段全查）；块内时间戳全是裸 `[HH:MM:SS]` | `::test_paragraphs_land_in_the_note_verbatim`、`test_sm_render_ep.py::test_markers_become_obsidian_writing_and_nothing_else_moves` |
 | 3 | 切片输入：`L2-market.in.md` 头里 `行号: 35–76`、`范围: 00:19:00–00:42:40`；地图两行、第二行行首 `→`；上文恰好 32–34 行、本章首行 `35 [00:19:00] 阿桥: `、末行 76、没有「下文」分隔行；`L2-bridge.in.md` 没有「上文」、下文恰好 35–38 行 | `::test_the_chapter_slice_input_is_labelled`、`test_sm_l2.py::test_head_is_one_key_per_line_and_the_map_marks_this_chapter`、`::test_an_empty_side_drops_its_separator_line`、`test_sm_transcript.py::test_slice_chapter_pads_two_minutes_and_truncates_at_the_episode_edges` |
 | 4 | 代码填的键：`bridge-01` 的 `start` 是 `00:00:00`、`market-03` 的 `end` 是 `00:42:40`、章内首尾相接、`who` 来自行表、产物里没有 `line`；schema 的 `line` 上下界 = 本章首末行号（35 / 76） | `::test_the_code_fills_ids_times_and_speakers`、`test_sm_l2.py::test_finish_fills_id_chapter_times_and_who`、`::test_the_first_topic_starts_at_the_chapter_start_and_the_last_ends_at_its_end`、`::test_two_topics_on_one_line_give_a_zero_length_topic`、`::test_the_schema_carries_this_chapters_line_range` |
-| 5 | 坏响应隔离：`bridge` 换成散文 → `_failed/EP91/L2-bridge.failed.json` 存在、`market` 三个片段照样写出、`topics.json` 里只有这三个话题、笔记无块、`整理: failed`、退出码 1；换回好响应重跑只调 1 次（`L2` / `bridge`），块出现 | `::test_one_bad_chapter_is_isolated_and_the_rest_still_land`（另有 `test_sm_l2.py::test_a_runner_that_throws_takes_down_one_chapter_not_the_episode`：runner 抛异常时也落 `_failed/`） |
+| 5 | 坏响应隔离：`bridge` 换成散文 → `_failed/EP91/L2-bridge.failed.json` 存在、`market` 三个片段照样写出、`topics.json` 里只有这三个话题、笔记无块、`整理: failed`、退出码 1；换回好响应重跑只调 1 次（`L2` / `bridge`），块出现 | `::test_one_bad_chapter_is_isolated_and_the_rest_still_land`、`::test_a_stale_topic_table_cannot_stand_in_for_the_chapter_that_just_failed`（评审补：上一趟的话题表不许替这一趟失败的章顶包）（另有 `test_sm_l2.py::test_a_runner_that_throws_takes_down_one_chapter_not_the_episode`：runner 抛异常时也落 `_failed/`） |
 | 6 | `market` 换成闸门违规的响应（schema 合法）：检查通过、片段写出，越界的 `ts` 原样留着 | `::test_a_gate_violating_chapter_still_passes_l2` |
 | 7 | **拦**：`<b>` 标记、`talk` 的空 `paras`、段不以 `[HH:MM:SS]` 开头、`line` 越界、空 `title`、缺 `channels` 键、`ts` 写成「胡写」、五类内容里的 HTML 注释（自审补）。**不拦、归一**：`1:05` → `00:01:05`、7 条 `quotes` 留前 6、`heard == means` 删掉、`line` 写成 `"36"`、乱序按 `line` 排、`aside` 多写的 `quotes` 留在片段里 | `test_sm_l2.py::test_a_third_kind_of_tag_in_paras_is_rejected`、`::test_empty_paras_on_a_talk_or_aside_is_rejected`、`::test_a_paragraph_without_a_timestamp_is_rejected`、`::test_a_line_outside_this_chapter_is_rejected`、`::test_empty_title_missing_key_and_unreadable_ts_are_rejected`、`::test_tidy_normalises_what_the_code_can_fix`、`::test_tidy_flattens_newlines_in_title_and_gist`、`::test_an_aside_that_wrote_quotes_keeps_them_in_the_fragment`、`::test_an_html_comment_anywhere_in_the_rendered_text_is_rejected` |
 | 8 | 并发：拖慢的假 runner 断言同时在跑 ≤ 3（且 > 1）；5 章合成输入全部完成；每一次 `_digest/` 写盘都发生在主线程；worker 中途读到的 `topics.json` 每一份都是合法 JSON | `test_sm_l2.py::test_three_chapters_at_a_time_and_every_write_lands_on_the_main_thread`、`::test_the_topic_table_is_replaced_in_one_step`（原子替换） |

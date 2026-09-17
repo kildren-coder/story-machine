@@ -219,6 +219,32 @@ def test_one_bad_chapter_is_isolated_and_the_rest_still_land(vault, tmp_path):
     assert HEAD_RE.findall(block_of(note_text(vault, "EP91"))).__len__() == 4
 
 
+def test_a_stale_topic_table_cannot_stand_in_for_the_chapter_that_just_failed(vault, tmp_path):
+    """上一趟的话题表还在盘上，这一趟这一章又挂了：不许拿旧表当「完成」的凭据。
+
+    「片段写了一半被杀」（frag 没了、话题表还记着它）之后重跑，那一章没过——盘上
+    的 `topics.json` 还停在上一趟，里面有它的旧话题，可它的片段这一趟一份都没装
+    进来。照着旧表渲染的话，笔记上那一节是个**空标题**（正题整段消失），
+    frontmatter 还写着 `整理: done`、退出码 0：`_failed/` 里躺着记录，人唯一会读
+    的那一面上却什么都看不出来（红线 9）。
+    """
+    assert run_ep(vault, "EP91", FakeRunner(RAW)) == 0
+    before = note_text(vault, "EP91")
+    (vault / "_digest" / "EP91" / "frag-bridge-02.json").unlink()
+
+    runner = raw_with(tmp_path, "EP91", "bridge")
+    assert run_ep(vault, "EP91", runner) == 1
+    assert runner.calls == [("EP91", "L2", "bridge")] * 2     # market 已完成，只补 bridge
+    assert (vault / "_failed" / "EP91" / "L2-bridge.failed.json").exists()
+
+    text = note_text(vault, "EP91")
+    assert read_frontmatter(text)["整理"] == "failed"
+    # 上一趟那块好的原样留着（`block_text=None` 只动 frontmatter），绝不许被换成
+    # 一块只剩标题的壳
+    assert block_of(text) == block_of(before)
+    assert without_block(text).replace("整理: failed", "整理: done") == without_block(before)
+
+
 # ---------------------------------------------------------------- 验收 6
 
 def test_a_gate_violating_chapter_still_passes_l2(vault, tmp_path):

@@ -569,5 +569,13 @@ def run_l2(paths, runner, ep: str, chapters: list[dict], segments: list[dict],
                          prompt_version=prompt["version"], generated_at=generated_at)
         _write_json(digest_dir / "topics.json", doc)
     if doc is None:
+        # 这一趟没有一章写成（全都跳过了，或者跑过的全挂了）：盘上那份话题表还停在
+        # 上一趟。**只认这一趟真拿到片段的章**——失败的那些章，旧表里有它们的话题、
+        # 片段却没装进 `done`，照着旧表渲染出来就是一串空标题，frontmatter 还写着
+        # `整理: done`，失败在人唯一会读的那一面上彻底消失（红线 9）。全跳过的那种
+        # 情况这里一个都不会滤掉，`topics.json` 也不重写，笔记照旧逐字节不变
         doc = _read_json(digest_dir / "topics.json")
+        if isinstance(doc, dict):
+            doc = {**doc, "topics": [t for t in (doc.get("topics") or [])
+                                     if isinstance(t, dict) and t.get("chapter") in done]}
     return doc, {f["id"]: f for fs in done.values() for f in fs}, failed
