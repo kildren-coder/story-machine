@@ -1,7 +1,7 @@
 # QA — issue #53 闸门 1 / 2 / 5：不逐字的引文与越界时间戳从整理稿里消失
 
-分支 `agent/issue-53`。沙箱内 `bash scripts/test.sh` 全绿（188 个 pytest 用例，
-比开工时的 162 个多 26 个），没有调用过 `claude -p`，没有碰过 vault，所有用例跑在
+分支 `agent/issue-53`。沙箱内 `bash scripts/test.sh` 全绿（189 个 pytest 用例，
+比开工时的 162 个多 27 个），没有调用过 `claude -p`，没有碰过 vault，所有用例跑在
 `tests/fixtures/vault/` 的临时副本上。
 
 这一票让 L3 从「只渲染」变成「先过闸门再渲染」：不逐字的原话锚点、落在话题范围外
@@ -21,7 +21,7 @@
 | `scripts/digest.py` | `ep` 子命令在 L2 之后、渲染之前跑闸门，渲染读过滤后的片段；闸门读不动产物（缺文件 / JSON 坏 / 片段指着章节表里没有的章）时报一句、退 2、不碰笔记 |
 | `SPEC.md` | §4 L3 第 1、2、5 条写明比的是哪一层单位、`ctx` 怎么取、越界的段只记不删、`gates.json` 的实际字段、读不动时抛异常；§5.7 块首行多了三个计数 |
 | `docs/agents/domain.md` | 目录树补上 `sm/l3.py` |
-| `tests/` | 新增 `test_sm_l3.py`（20）、`test_s3_gates.py`（5）；`test_sm_render_ep.py` 加 1 并跟着改签名；`test_s2_topics.py` 三条跟着改（见下） |
+| `tests/` | 新增 `test_sm_l3.py`（21）、`test_s3_gates.py`（5）；`test_sm_render_ep.py` 加 1 并跟着改签名；`test_s2_topics.py` 三条跟着改（见下） |
 
 `test_s2_topics.py` 那三条为什么要改：#52 的两条端到端用例比的是「片段逐个等于
 fixture」，现在片段多了闸门补的 `ctx`，改成比「L2 写出来那一份」（去掉 `ctx`）；
@@ -169,6 +169,12 @@ $ python scripts/digest.py ep EP91 --vault /tmp/demo53/vault --runner fake:tests
 读不出来的片段在 L2 那一步就被重跑补上了
 （`test_s3_gates.py::test_a_broken_fragment_is_refilled_by_l2_before_the_gates_see_it`），
 以及自审那三条各自的用例（见第 1 节）。
+
+评审补的两条（`review:` commit）：`ts` 缺了或读不出时刻的引文按 `quotes_out_of_range`
+删、而话题自己的 `start` / `end` 读不出来时闸门 2 整个不跑（这对反着的口径原先没有
+用例钉住，`test_sm_l3.py::test_a_quote_whose_ts_cannot_be_read_is_dropped_as_out_of_range`）；
+验收 5 那条总断言补一句「还剩 3 条锚点、段数没变」的前置断言——引文要是被全删光，
+底下两个遍历都成空转，那条断言会变成永真。
 
 ---
 

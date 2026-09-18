@@ -125,6 +125,8 @@ def test_the_gates_only_delete_and_only_add_ctx(vault):
     assert run_ep(vault, "EP91", FakeRunner(RAW)) == 0
 
     after = digest(vault, "EP91", "frag-market-01.json")
+    # 先钉住「还剩东西」：全删光的话下面两条遍历都成了空转，这条总断言会变成永真
+    assert len(after["quotes"]) == 3 and len(after["paras"]) == len(before["paras"])
     source = set(strings(before))
     for s in strings(after, skip=("ctx", "provenance")):
         assert s in source, s

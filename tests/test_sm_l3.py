@@ -184,6 +184,26 @@ def test_a_paragraph_past_the_topic_margin_is_also_flagged():
     assert entry["paras_out_of_range"] == ["00:12:30"]
 
 
+def test_a_quote_whose_ts_cannot_be_read_is_dropped_as_out_of_range():
+    """`ts` 缺了或读不出时刻的引文照 `quotes_out_of_range` 删——**逐字是命中的，
+    但闸门 2 拿不到尺子去量它**。
+
+    钉住这一条是因为它跟「话题自己的 `start` / `end` 读不出来就整个跳过闸门 2、
+    一条都不删」是反着的，容易被后来人当成不一致顺手「修」掉：话题的起止坏了是
+    整份产物的问题（`schema` 那一栏会报，宁可不删），单条引文的 `ts` 坏了是这一条
+    自己的问题，删它跟删一条越界的引文是同一件事，计数也落在同一个键上。
+    """
+    f = frag(quotes=[{"ts": "年底", "who": "阿桥", "text": "先说结论，工期要拖到年底。"},
+                     {"who": "阿桥", "text": "先说结论，工期要拖到年底。"}])
+    out, entry = gate(f)
+    assert (entry["quotes_dropped"], entry["quotes_out_of_range"]) == (0, 2)
+    assert out["quotes"] == []
+    assert any("读不出时刻" in e for e in entry["schema"])   # 不是静默丢的
+    # 反过来：话题的起止读不出来时，闸门 2 整个不跑——引文照留（红线 2）
+    out, entry = gate(frag(end="年底", quotes=[quote("先说结论，工期要拖到年底。", "00:10:00")]))
+    assert entry["quotes_out_of_range"] == 0 and len(out["quotes"]) == 1
+
+
 # ---------------------------------------------------------------- 闸门 5 的 ASR 条款
 
 def test_an_asr_entry_not_in_the_chapter_slice_is_dropped():
