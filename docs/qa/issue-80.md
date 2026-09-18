@@ -212,11 +212,11 @@ ssh 5070 "C:\asr\venv\Scripts\python.exe -c ""import sys; sys.path.insert(0,'C:/
 
 ```
     redecode: chunks=449 segments=449
-    redecode: suspects=33 replaced=30 residual=3 errors=0 han=54007->57232 in 121s
-    segments=449  191.0min in 251s (45.7x realtime)  t2s=1234 chars
+    redecode: suspects=33 replaced=32 residual=1 errors=0 han=54007->57281 in 104s
+    segments=449  190.7min in 248s (46.1x realtime)  t2s=5372 chars
 ```
 
-逐项对照（数量级取自 EP02 的实验与第 6 节的干跑）：
+（这三行是 6.5 里 EP02 音频整跑的原样输出。）逐项对照：
 
 - **`chunks=N segments=M` 两个数必须相等。** 不等就会在下一行看到
   `redecode: skipped (segments != chunks (449 vs 452))`，补解整步没跑，正本与旧流程
@@ -369,3 +369,24 @@ numpy 的 float64 是 Python float 的子类所以 json 认，numpy 的 bool **�
   （用例 `test_smpc_drops_what_it_cannot_serialise_instead_of_crashing_at_write_time`）。
 
 修完再整跑一遍 EP98 的结果见 6.5。
+
+### 6.5 修完整跑：EP98（= EP02 音频）落盘，逐段对上正本
+
+```
+INFO redecode: chunks=449 segments=449
+INFO redecode: suspects=33 replaced=32 residual=1 errors=0 han=54007->57281 in 104s
+INFO segments=449  190.7min in 248s (46.1x realtime)  t2s=5372 chars
+```
+
+- `config` 以 ` redecode` 结尾；顶层 `redecode` 的 `rule` / 计数与日志一致，`elapsed_s` 103.9。
+- 未替换的 417 段与 vault 正本（分离前）**逐字节相同**——顺带证明第一遍在 8 月正本、09-18
+  重跑、这次三者一致，补解没有碰到不该碰的段。
+- 32 个替换块「词拼起来 = 段文本」全部成立；与 09-18 实验同级解码文本的相似度中位 1.00、
+  最低 1.00（30 块可比）——重解是确定性的。
+- picked：15 s × 24、10 s × 7、**7 s × 1**（块 389，02:44:59–02:45:29，114 → 134 汉字）、
+  残留 × 1（块 47，00:25:41–00:26:08，三级增益 16 / 15 / 13 < 20，保留原文）。
+- 与 6.2 干跑的差别只在干跑没有数据的两块：73 在 10 s 补上（15 s 版丢字，`kept=0.77` 拦下），
+  389 走到 7 s 补上。
+- **7 秒那一级第一次有真实样例**：块 389 要抽听（第 5 节 2 的做法）。
+- 产物冻结在 vault `_lab\EP02-redecode-20260919\`（`EP98.transcript.json` / `EP98.words.json` /
+  `run.log` / README），不进仓库；它就是「EP02 正本 + 补解」，要不要采用为新正本由人决定。
