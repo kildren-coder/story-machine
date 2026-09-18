@@ -1,7 +1,7 @@
 # QA — issue #53 闸门 1 / 2 / 5：不逐字的引文与越界时间戳从整理稿里消失
 
-分支 `agent/issue-53`。沙箱内 `bash scripts/test.sh` 全绿（185 个 pytest 用例，
-比开工时的 162 个多 23 个），没有调用过 `claude -p`，没有碰过 vault，所有用例跑在
+分支 `agent/issue-53`。沙箱内 `bash scripts/test.sh` 全绿（188 个 pytest 用例，
+比开工时的 162 个多 26 个），没有调用过 `claude -p`，没有碰过 vault，所有用例跑在
 `tests/fixtures/vault/` 的临时副本上。
 
 这一票让 L3 从「只渲染」变成「先过闸门再渲染」：不逐字的原话锚点、落在话题范围外
@@ -17,16 +17,33 @@
 | `scripts/sm/l3.py`（新，约 230 行） | `run_gates(paths, ep) -> GateReport`：读 `chapters.json` / `topics.json` / 全部 `frag-*.json` / 逐字稿，每个片段跑闸门 1（引文逐字命中，命中补 `ctx`）、闸门 2（时间戳范围）、闸门 5 的 ASR 条款，写回过滤后的片段并写 `gates.json`。纯函数 `gate_frag` / `hit_segment` / `in_topic` / `in_chapter` / `check_shape` 各自可单测 |
 | `scripts/sm/l2.py` | `_write_json` / `_check_paras` / `_check_items` 去掉下划线（§5.4 的形状检查与 `_digest/` 的字节形状两层共用一份）；新增 `json_bytes`，L3 拿它比「写回前后有没有真变」 |
 | `scripts/sm/render_ep.py` | `render_digest` 多一个必填参数 `gates`：块首行加「闸门：删引文 n 条、越界 m 条、删 ASR 条目 k 条」，全 0 也写 |
+| `scripts/sm/text.py` | `norm()` 收 `str()`：逐字稿正本里混进一个非字符串不该把整集掀翻在一句 TypeError 上（`parse_hms` 同样的路子）|
 | `scripts/digest.py` | `ep` 子命令在 L2 之后、渲染之前跑闸门，渲染读过滤后的片段；闸门读不动产物（缺文件 / JSON 坏 / 片段指着章节表里没有的章）时报一句、退 2、不碰笔记 |
 | `SPEC.md` | §4 L3 第 1、2、5 条写明比的是哪一层单位、`ctx` 怎么取、越界的段只记不删、`gates.json` 的实际字段、读不动时抛异常；§5.7 块首行多了三个计数 |
 | `docs/agents/domain.md` | 目录树补上 `sm/l3.py` |
-| `tests/` | 新增 `test_sm_l3.py`（17）、`test_s3_gates.py`（5）；`test_sm_render_ep.py` 加 1 并跟着改签名；`test_s2_topics.py` 三条跟着改（见下） |
+| `tests/` | 新增 `test_sm_l3.py`（20）、`test_s3_gates.py`（5）；`test_sm_render_ep.py` 加 1 并跟着改签名；`test_s2_topics.py` 三条跟着改（见下） |
 
 `test_s2_topics.py` 那三条为什么要改：#52 的两条端到端用例比的是「片段逐个等于
 fixture」，现在片段多了闸门补的 `ctx`，改成比「L2 写出来那一份」（去掉 `ctx`）；
 闸门违规那一条原来断言越界的引文**留在**片段里（当时 L3 还没有），现在断言 L2
 照写不误、L3 删掉、`_pairs/` 的原始响应里照旧留着——**代码任何一处都没改模型的字**
 这件事没变，变的是它在哪一层被删。
+
+实现完成后又派了一个 sonnet 子代理做对抗式复查，逮到三个真缺陷，都已修、各配了
+用例，列在最前面：
+
+1. **中途炸掉会在盘上留下「删了一半」的片段。** 原来是过一个话题写回一个：前几份
+   写回去了，后面一份抛出去（孤儿片段），`gates.json` 还没写——那些删除就再也没有
+   记录了，下一趟看到的是已经删过的片段、计数却是 0（红线 9；#50 的「闸门 1 通过
+   率」也就此失真）。现在全集过完才落盘，要么整趟都写，要么盘上一个字节都没动
+   （用例 `test_a_run_that_blows_up_halfway_leaves_nothing_on_disk`）。
+2. **`quotes[].text` / `asr[].heard` 不是字符串时炸 `TypeError`**（手改坏一份片段
+   就够了），而 `digest.py` 只收 `OSError` 与 `ValueError`，人看到的是一整页
+   traceback。现在照删并计数——不是字符串的引文本来也不可能是逐字稿里的一句话，
+   `schema` 那一栏同时把它报出来（`test_a_quote_whose_text_is_not_a_string_is_dropped_not_crashed`）。
+3. **章节表的时刻读不出来时退成 `0`**，会算出一段错的切片，再照着它删掉本该留下的
+   ASR 条目，而盘上完全看不出问题出在 `chapters.json`。片段那边有 `schema` 一栏可
+   记，章节表这边没有，所以改成抛（`test_a_chapter_with_an_unreadable_time_raises`）。
 
 两处判断题面没写死、我按红线选的（评审重点看这两处）：
 
@@ -145,7 +162,8 @@ $ python scripts/digest.py ep EP91 --vault /tmp/demo53/vault --runner fake:tests
 §5.4 只记在 `schema` 那一栏不抛不删（`::test_a_fragment_that_breaks_the_shape_is_recorded_not_raised`）、
 块首行非 0 计数的渲染（`test_sm_render_ep.py::test_the_block_head_reports_what_the_gates_dropped`）、
 读不出来的片段在 L2 那一步就被重跑补上了
-（`test_s3_gates.py::test_a_broken_fragment_is_refilled_by_l2_before_the_gates_see_it`）。
+（`test_s3_gates.py::test_a_broken_fragment_is_refilled_by_l2_before_the_gates_see_it`），
+以及自审那三条各自的用例（见第 1 节）。
 
 ---
 
