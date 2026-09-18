@@ -95,7 +95,25 @@ L7      渲染      纯代码 ──► 日报 + 事件笔记 + 跨 UP 对照
 
 ### 阶段 0：转写（PC）
 
-**转写**：`faster-whisper` `large-v3`，`float16` / `batch_size=16` / VAD 开 / `word_timestamps=True` / `language="zh"`；`multilingual` 不开；`initial_prompt` 不用。此配置冻结。环境：CUDA 12.8+，CTranslate2 ≥ 4.7.0。
+**转写**：`faster-whisper` `large-v3`，`float16` / `batch_size=16` / VAD 开 / `word_timestamps=True` / `language="zh"`；`multilingual` 不开；`initial_prompt` 不用。此配置冻结，唯一的例外是下面的吞块补解：它只改 `chunk_length`，而且只作用于判出来的块。环境：CUDA 12.8+，CTranslate2 ≥ 4.7.0。
+
+**吞块补解**（`smpc.py transcribe` 内，转写之后、写盘之前）：batched 管线把 VAD 语音拼成 ≤ 30 秒的块，每块只解一遍，没有降温重试。长块会被整块吞掉，只剩块头或块尾几秒。EP02 实测正本少了约 6% 的汉字（#79、#80）。补解就是把同一段音频换个切法再听一遍：不用 LLM，不改写别的块。
+- **块**：用管线同一套 VAD 参数（`max_speech_duration_s=30`、`min_silence_duration_ms=160`）复算语音块，块 k 对应第一遍的第 k 段。段数与块数对不上时，整步跳过，并在日志里报原因。
+- **疑似吞块**：块的语音时长 ≥ 8 秒，且满足以下任一条：
+  - 汉字数 / 语音秒 < 3；
+  - 块内空洞 ≥ 5 秒。块内空洞 = 相邻两词之间夹着的 VAD 语音秒数，取最大；块首到第一个词、最后一个词到块尾也算。
+- **重解阶梯**：把块的原始时间跨度单独拿出来，冻结配置只改 `chunk_length`，依次按 15 → 10 → 7 秒各解一版，解出的文本同样逐字 t2s。每解完一级：
+  - 从原文和已解各版中取汉字最多的一版；
+  - 取中的版本不再是疑似吞块就停，否则进下一级。
+  - 某一级解码抛异常：记下来，进下一级。
+- **可参选的版本**：原文，以及同时满足以下三条的解码版：
+  - 比原文多 ≥ 20 个汉字；
+  - 原文汉字 ≥ 80% 按顺序出现在新版里；
+  - 不复读（同一个 4 字汉字串出现不超过 5 次）。
+
+  取中的版本替换这一段的文本和词。替换后仍满足「词拼起来 = 段文本」，因为说话人分离按词重建段。
+- **残留**：阶梯走完仍是疑似吞块的块，不再重试，保留当时取中的版本；记进产物，并在日志里报条数，不静默。
+- **产物**：`transcript.json` 顶层加 `redecode`，记每个疑似块：起止时间，各级的汉字数、空洞和错误，取中哪一级，是否残留。`config` 追加 ` redecode`。已转写的集不回补（正本不可变），要补由人决定重转。
 
 **说话人分离**（`pc/smdiar.py`，venv `C:\asr\venv-diar`，torch CPU）：
 - 模型 3D-Speaker `iic/speech_campplus_sv_zh_en_16k-common_advanced`，权重缓存 `E:\asr\ms-cache`。禁用 `pyannote.audio` 4.x。
@@ -107,7 +125,7 @@ L7      渲染      纯代码 ──► 日报 + 事件笔记 + 跨 UP 对照
 
 **字形归一**：写盘时按 opencc `t2s` 逐字表繁转简，`transcript.json` / `words.json` 同步，`orthography` 字段记录。禁用 `tw2sp` 等词汇转换表。存量用 `pc/t2s_backfill.py`。
 
-**输出**：JSON 正本 `{start, end, speaker, text}`，浮点秒，永久不可变；`EP{n}.txt` 派生渲染。中英混杂保留原文。
+**输出**：JSON 正本 `{start, end, speaker, text}`，浮点秒，永久不可变；`EP{n}.txt` 派生渲染。英文词（人名、机构名、术语）照原文写，或写成通行的中文译名，都算对，不强求统一。算错的只有一种：把英文写成没有意义的同音汉字，那是 ASR 生音。
 
 **声纹库与点名**（`pc/speakers.py`，`_assets/speakers.json`）：
 - 每集质心与库比对，门槛 0.65；库存每集样本，每人 ≤ 20 集按时长取长的，质心随取随算。
