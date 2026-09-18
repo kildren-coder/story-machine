@@ -335,6 +335,7 @@ def test_a_segment_count_mismatch_skips_the_whole_step():
     _, (segs0, words0), segs, words, rep, calls = run_fixture(doc)
     assert rep["skipped"] == "segments != chunks (9 vs 10)"
     assert calls == [] and rep["suspects"] == rep["replaced"] == rep["errors"] == 0
+    assert rep["chunks"] == 10          # 跳过了也要照实说复算出几块，好对着查
     assert segs == segs0 and words == words0
     assert rep["han_before"] == rep["han_after"] == sum(
         redecode.n_han(s["text"]) for s in segs0)
@@ -346,6 +347,7 @@ def test_a_words_count_mismatch_skips_the_whole_step_too():
     _, _, segs, words, rep, calls = run_fixture(doc)
     assert rep["skipped"] == "words != segments (9 vs 10)"
     assert calls == [] and len(segs) == 10 and len(words) == 9
+    assert rep["chunks"] == 10
 
 
 # ---------------------------------------------------------------- 验收 9：报告的字段
@@ -574,6 +576,23 @@ def test_smpc_skips_the_step_when_the_vad_recompute_blows_up(smpc, monkeypatch):
     assert (segs, ws) == (segments, [[]]) and pipe.calls == []
     assert rep["replaced"] == 0 and rep["blocks"] == []
     assert smpc.ascii_only(rep["skipped"]).isascii()
+
+
+def test_smpc_never_lets_the_redecode_step_take_the_transcript_down(smpc, monkeypatch):
+    """补解跑在写盘之前：从这里漏出去的异常会让几小时的转写一个字都落不了盘。"""
+    sr = smpc.SR
+    fake_faster_whisper(monkeypatch, list(range(30 * sr)), [(0, 25 * sr)])
+    segments = [{"start": 0.0, "end": 1.0, "speaker": None, "text": "河口夜市"}]
+    words = [[[0.0]]]                       # 词表坏了：规则层算空洞时会炸
+    pipe = FakePipe()
+    with pytest.raises(IndexError):         # 规则层自己不兜，兜在 smpc 这一层
+        redecode.run([{"k": 0, "start": 0.0, "end": 25.0, "speech": [[0.0, 25.0]]}],
+                     segments, words, lambda *a: ([], []))
+
+    segs, ws, rep = smpc.redecode_pass(pipe, "EP93.m4a", {}, segments, words, 30.0)
+    assert rep["skipped"].startswith("redecode failed: IndexError")
+    assert (segs, ws) == (segments, words) and rep["replaced"] == 0
+    assert rep["elapsed_s"] is not None and smpc.ascii_only(rep["skipped"]).isascii()
 
 
 def test_smpc_writes_the_report_and_marks_the_config(smpc):

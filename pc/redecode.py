@@ -174,9 +174,9 @@ def _report(segments, chunks=0):
             "han_before": h, "han_after": h, "blocks": []}
 
 
-def skipped(reason, segments):
+def skipped(reason, segments, chunks=0):
     """整步没跑成时的报告：不静默，原因照记（红线 9），正本照常写盘。"""
-    rep = _report(segments)
+    rep = _report(segments, chunks)
     rep["skipped"] = reason
     return rep
 
@@ -198,10 +198,12 @@ def run(chunks, segments, words, decode, progress=None):
     # 块 k 必须对应段 k。对不上就整步跳过：宁可不补，也不能错位改到别的块（红线 1）。
     if len(segments) != len(chunks):
         return list(segments), list(words), skipped(
-            "segments != chunks (%d vs %d)" % (len(segments), len(chunks)), segments)
+            "segments != chunks (%d vs %d)" % (len(segments), len(chunks)),
+            segments, len(chunks))
     if len(words) != len(segments):
         return list(segments), list(words), skipped(
-            "words != segments (%d vs %d)" % (len(words), len(segments)), segments)
+            "words != segments (%d vs %d)" % (len(words), len(segments)),
+            segments, len(chunks))
 
     marks = [is_suspect(c, segments[k]["text"], words[k]) for k, c in enumerate(chunks)]
     rep["suspects"] = sum(1 for m in marks if m)
@@ -300,7 +302,10 @@ def demo_decoder(doc):
 def _fmt_tries(entry):
     for t in entry["tries"]:
         if t["error"]:
-            yield "     %2d 秒: 解码失败 %s" % (t["chunk_length"], t["error"])
+            # 解码抛异常 vs 解出来了但词和文本对不上：两种失败，别混着说
+            yield "     %2d 秒: %s %s" % (t["chunk_length"],
+                                          "解码失败" if t["han"] is None else "输出弃用",
+                                          t["error"])
         else:
             mark = "参选" if t["acceptable"] else ("不参选 " + (t["reason"] or ""))
             yield "     %2d 秒: %d 汉字  空洞 %.1fs  复读 %d  %s%s" % (

@@ -292,8 +292,21 @@ def redecode_pass(pipe, pcm_path, kw, segments, words_side, total_s):
     在第一遍收完段之后、写盘之前做——正本一写盘就永久不可变，不回补。
     返回 (segments, words_side, 报告)。**这一步失败绝不让转写失败**：报告标
     skipped、日志报原因，正本照常写盘。
+
+    所以这里兜一个 except Exception：补解跑在写盘之前，从这里漏出去的异常会让几个
+    小时的转写一个字都落不了盘——比不补严重得多。
     """
     t0 = time.time()
+    try:
+        segs, words, rep = _redecode(pipe, pcm_path, kw, segments, words_side, total_s)
+    except Exception as e:
+        segs, words, rep = segments, words_side, redecode.skipped(
+            "redecode failed: %r" % (e,), segments)
+    rep["elapsed_s"] = round(time.time() - t0, 1)
+    return segs, words, rep
+
+
+def _redecode(pipe, pcm_path, kw, segments, words_side, total_s):
     try:
         from faster_whisper.audio import decode_audio
         from faster_whisper.vad import VadOptions, get_speech_timestamps
@@ -330,10 +343,7 @@ def redecode_pass(pipe, pcm_path, kw, segments, words_side, total_s):
         # 单位跟第一遍一样是秒：进度条会退回去再爬一遍音频，那正是这一步在干的事
         out("PROGRESS", "%.1f" % chunk["end"], "%.1f" % total_s)
 
-    segments, words_side, rep = redecode.run(chunks, segments, words_side,
-                                             decode, progress)
-    rep["elapsed_s"] = round(time.time() - t0, 1)
-    return segments, words_side, rep
+    return redecode.run(chunks, segments, words_side, decode, progress)
 
 
 def cmd_transcribe(ep):
