@@ -134,6 +134,26 @@ def test_the_gates_only_delete_and_only_add_ctx(vault):
                                                   if q["ctx"] in seg_texts]
 
 
+def test_a_broken_fragment_is_refilled_by_l2_before_the_gates_see_it(vault):
+    """读不出来的片段在 L2 那一步就被认出来了（#52 的 `read_done`）：它那一章重跑，
+    闸门拿到的是重跑出来的新片段。
+
+    所以闸门自己那道「读不出来就抛」（`test_sm_l3` 里单测的那条）是最后一道防线，
+    不是常走的路——`ep` 这条路上走到闸门的产物，都是这一趟刚写出来的。
+    """
+    with_bad_market_01(vault)
+    (vault / "_digest" / "EP91" / "frag-market-02.json").write_bytes(b'{"id": "market-02",')
+
+    runner = FakeRunner(RAW)
+    assert run_ep(vault, "EP91", runner) == 0
+    assert runner.calls == [("EP91", "L2", "market")]      # 只补这一章，L1 与 bridge 不动
+    # 重跑把坏片段连同那一章的其他片段一起覆盖了，market-01 也回到了 L2 的原样：
+    # 闸门这一趟无事可删
+    entry = digest(vault, "EP91", "gates.json")["topics"]["market-01"]
+    assert (entry["quotes_dropped"], entry["quotes_out_of_range"], entry["asr_dropped"]) \
+        == (0, 0, 0)
+
+
 def test_a_second_run_drops_nothing_and_leaves_the_fragment_alone(vault):
     """验收 6 的端到端那一半：删过一轮之后重跑，计数全 0、片段逐字节不变。"""
     with_bad_market_01(vault)

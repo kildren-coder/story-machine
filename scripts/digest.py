@@ -174,7 +174,15 @@ def cmd_ep(args) -> int:
     # L3 闸门在渲染之前：不逐字的引文、越界的时间戳、逐字稿里没有的 ASR 条目在这里
     # 删掉，笔记渲染的是过滤后的片段。闸门只删只警（越界的段只记不删，红线 2），
     # 不产生失败态——schema 与覆盖的失败态是 #54 的事
-    report = run_gates(paths, ep, generated_at=now, log=lambda m: log(m))
+    try:
+        report = run_gates(paths, ep, generated_at=now, log=lambda m: log(m))
+    except (OSError, ValueError) as e:
+        # 闸门读不动的是 `_digest/` 里的产物（缺文件、JSON 坏、片段指着不存在的章）。
+        # 照 chapters.json 那条路子办：报出来、退 2，**不碰笔记**——悄悄重跑会把人
+        # 正要看的证据覆盖掉（红线 9）
+        log(f"✖ L3 闸门读不下去（{type(e).__name__}: {e}）——{paths.rel(paths.digest(ep))} "
+            f"里的产物坏了或缺了，看一眼再删，或者 --force 重跑 L2")
+        return 2
     gates = report.totals
     log(f"L3 闸门：删引文 {gates['quotes_dropped']} 条、越界 "
         f"{gates['quotes_out_of_range']} 条、删 ASR 条目 {gates['asr_dropped']} 条，"
