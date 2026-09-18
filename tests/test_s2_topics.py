@@ -35,6 +35,17 @@ def drop_prov(obj: dict) -> dict:
     return {k: v for k, v in obj.items() if k != "provenance"}
 
 
+def as_l2_wrote_it(obj: dict) -> dict:
+    """去掉 provenance 与 L3 补的 `quotes[].ctx`——这个文件比的是 L2 写出来那一份。
+
+    `ctx` 是闸门 1 命中后补的所在段全文（#53），不是 L2 的产物。
+    """
+    out = drop_prov(obj)
+    if isinstance(out.get("quotes"), list):
+        out["quotes"] = [{k: v for k, v in q.items() if k != "ctx"} for q in out["quotes"]]
+    return out
+
+
 def digest(vault, ep: str, name: str) -> dict:
     return json.loads((vault / "_digest" / ep / name).read_bytes().decode("utf-8"))
 
@@ -80,7 +91,7 @@ def test_ep91_end_to_end(vault):
                  "frag-market-02.json", "frag-market-03.json", "topics.json"):
         got = digest(vault, "EP91", name)
         want = json.loads((FIX / "digest" / "EP91" / name).read_bytes().decode("utf-8"))
-        assert drop_prov(got) == drop_prov(want), name
+        assert as_l2_wrote_it(got) == as_l2_wrote_it(want), name
         assert set(got["provenance"]) == set(PROV_KEYS), name
     assert digest(vault, "EP91", "frag-market-01.json")["provenance"]["unit"] == "market"
     assert digest(vault, "EP91", "topics.json")["provenance"]["unit"] == "all"
@@ -120,7 +131,7 @@ def test_ep92_end_to_end(vault):
                  "frag-followup-03.json", "topics.json"):
         got = digest(vault, "EP92", name)
         want = json.loads((FIX / "digest" / "EP92" / name).read_bytes().decode("utf-8"))
-        assert drop_prov(got) == drop_prov(want), name
+        assert as_l2_wrote_it(got) == as_l2_wrote_it(want), name
 
     block = block_of(note_text(vault, "EP92"))
     heads = HEAD_RE.findall(block)
@@ -302,8 +313,13 @@ def test_a_gate_violating_chapter_still_passes_l2(vault, tmp_path):
     assert not (vault / "_failed" / "EP91").exists()
     frag = digest(vault, "EP91", "frag-market-01.json")
     assert frag["kind"] == "talk" and frag["paras"]
-    # 越界的时间戳原样留着，不许代码替模型改（红线 2）
-    assert any(q["ts"] == "00:10:00" for q in frag["quotes"])
+    # 越界的那条引文 L2 照写不误，删它是 L3 的事（#53）：闸门删掉之后片段里没有了，
+    # 计数记在 gates.json 上，原始响应里照旧留着——代码任何一处都没改模型的字（红线 2）
+    assert not any(q["ts"] == "00:10:00" for q in frag["quotes"])
+    assert digest(vault, "EP91", "gates.json")["topics"]["market-01"] \
+        ["quotes_out_of_range"] == 1
+    raw = (vault / "_pairs" / "EP91" / "L2-market.raw.json").read_bytes().decode("utf-8")
+    assert "00:10:00" in raw
 
 
 # ---------------------------------------------------------------- 验收 9

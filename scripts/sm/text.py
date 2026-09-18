@@ -27,8 +27,12 @@ def parse_hms(s: str) -> int | None:
 
 
 def norm(s: str) -> str:
-    """闸门用的归一化：去时间戳、去空白。只授权这两样，不动标点（红线 2）。"""
-    s = TS_RE.sub("", s or "")
+    """闸门用的归一化：去时间戳、去空白。只授权这两样，不动标点（红线 2）。
+
+    非字符串照 `str()` 收（`parse_hms` 同样的路子）：闸门拿它比的是逐字稿正本里的
+    段文本，正本里混进一个数字不该把整集掀翻在一句 TypeError 上。
+    """
+    s = TS_RE.sub("", str(s or ""))
     s = s.translate({ord(c): None for c in EXTRA_WS})
     return WS_RE.sub("", s)
 

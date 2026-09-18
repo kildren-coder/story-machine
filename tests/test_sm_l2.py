@@ -378,8 +378,8 @@ def test_three_chapters_at_a_time_and_every_write_lands_on_the_main_thread(tmp_p
 
     import sm.l2 as l2
     writes: list[str] = []
-    real = l2._write_json
-    monkeypatch.setattr(l2, "_write_json",
+    real = l2.write_json
+    monkeypatch.setattr(l2, "write_json",
                         lambda p, o: (writes.append(threading.current_thread().name), real(p, o))[1])
 
     runner = SlowRunner(paths.digest("EP99"))
@@ -406,7 +406,7 @@ def test_the_topic_table_is_replaced_in_one_step(tmp_path, monkeypatch):
     """
     import sm.l2 as l2
     p = tmp_path / "topics.json"
-    l2._write_json(p, {"topics": [{"id": "old"}]})
+    l2.write_json(p, {"topics": [{"id": "old"}]})
 
     wrote: list[str] = []
     real = Path.write_bytes
@@ -418,7 +418,7 @@ def test_the_topic_table_is_replaced_in_one_step(tmp_path, monkeypatch):
         return real(self, data)
 
     monkeypatch.setattr(Path, "write_bytes", spy)
-    l2._write_json(p, {"topics": [{"id": "new"}]})
+    l2.write_json(p, {"topics": [{"id": "new"}]})
     assert wrote == ["topics.json.tmp"]
     assert json.loads(p.read_bytes().decode("utf-8"))["topics"][0]["id"] == "new"
     assert list(tmp_path.glob("*.tmp")) == []

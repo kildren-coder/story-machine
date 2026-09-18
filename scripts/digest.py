@@ -31,6 +31,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from sm.l1 import run_l1                                          # noqa: E402
 from sm.l2 import body_chars, paras_chars, ratio_of, run_l2       # noqa: E402
+from sm.l3 import run_gates                                       # noqa: E402
 from sm.note import read_frontmatter, read_note, read_speakers    # noqa: E402
 from sm.paths import VaultPaths                                   # noqa: E402
 from sm.prov import now_iso, read_prompt                          # noqa: E402
@@ -170,10 +171,27 @@ def cmd_ep(args) -> int:
         f"aside {kinds['aside']}、filler {kinds['filler']}）；正文合计 {wrote} 字 / "
         f"逐字稿 {src} 字，压缩比 {ratio_of(wrote, src)} → "
         f"{paths.rel(paths.digest(ep) / 'topics.json')}")
+    # L3 闸门在渲染之前：不逐字的引文、越界的时间戳、逐字稿里没有的 ASR 条目在这里
+    # 删掉，笔记渲染的是过滤后的片段。闸门只删只警（越界的段只记不删，红线 2），
+    # 不产生失败态——schema 与覆盖的失败态是 #54 的事
+    try:
+        report = run_gates(paths, ep, generated_at=now, log=lambda m: log(m))
+    except (OSError, ValueError) as e:
+        # 闸门读不动的是 `_digest/` 里的产物（缺文件、JSON 坏、片段指着不存在的章）。
+        # 照 chapters.json 那条路子办：报出来、退 2，**不碰笔记**——悄悄重跑会把人
+        # 正要看的证据覆盖掉（红线 9）
+        log(f"✖ L3 闸门读不下去（{type(e).__name__}: {e}）——{paths.rel(paths.digest(ep))} "
+            f"里的产物坏了或缺了，看一眼再删，或者 --force 重跑 L2")
+        return 2
+    gates = report.totals
+    log(f"L3 闸门：删引文 {gates['quotes_dropped']} 条、越界 "
+        f"{gates['quotes_out_of_range']} 条、删 ASR 条目 {gates['asr_dropped']} 条，"
+        f"越界段 {gates['paras_out_of_range']} 处 → "
+        f"{paths.rel(paths.digest(ep) / 'gates.json')}")
     # 块首行那个时间说的是「这份整理稿什么时候生成的」，取产物自己记的那个：跳过
     # L2 重渲染时用当下，笔记每跑一次就变一次（Obsidian 记一条新版本、同步重传）
-    block = render_digest(topics["topics"], frags, version,
-                          prov.get("generated_at") or now)
+    block = render_digest(topics["topics"], report.frags, version,
+                          prov.get("generated_at") or now, gates)
     missed = write_into_note(note, block, "done", version)
     if missed:
         log(f"⚠ 笔记没有 frontmatter，{'、'.join(missed)} 没写进去")
