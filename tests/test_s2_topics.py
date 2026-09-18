@@ -99,7 +99,7 @@ def test_ep91_end_to_end(vault):
     assert len(rows_under(sec, "疑似 ASR 生音")) == 1
 
     fm = read_frontmatter(note_text(vault, "EP91"))
-    assert fm["整理"] == "done" and fm["整理版本"] == L2_VERSION == "L2-topic@0.1"
+    assert fm["整理"] == "done" and fm["整理版本"] == L2_VERSION == "L2-topic@0.2"
     stripped = without_block(note_text(vault, "EP91")) \
         .replace("整理: done\n", "", 1).replace(f"整理版本: {L2_VERSION}\n", "", 1)
     assert stripped == fixture_note_text("EP91")
