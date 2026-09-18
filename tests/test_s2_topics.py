@@ -11,6 +11,7 @@ import re
 import shutil
 
 from conftest import FIX, L2_VERSION, NOW, RAW, RAW_BAD, fixture_note_text, note_path, note_text, run_ep
+from sm.l2 import paras_chars
 from sm.note import read_frontmatter
 from sm.prov import PROV_KEYS
 from sm.runner import FakeRunner
@@ -52,11 +53,15 @@ def rows_under(section: str, title: str) -> list[str]:
     return m.group(1).splitlines() if m else []
 
 
-def raw_with(tmp_path, ep: str, unit: str):
-    """`raw/` 的副本，其中一章的响应换成 `raw-bad/` 的那一份。"""
-    root = tmp_path / f"raw-{ep}-{unit}"
+def raw_with(tmp_path, ep: str, unit: str, src: str | None = None):
+    """`raw/` 的副本，其中一章的响应换成 `raw-bad/` 的那一份。
+
+    `src` 给的是 `raw-bad/` 那边的文件名：同一章可以有好几份坏响应（`market` 有
+    闸门违规的，也有字数远远不达标的 `market-short`），落到副本里都叫这一章的名字。
+    """
+    root = tmp_path / f"raw-{ep}-{src or unit}"
     shutil.copytree(RAW, root)
-    shutil.copy(RAW_BAD / ep / f"L2-{unit}.raw.json", root / ep / f"L2-{unit}.raw.json")
+    shutil.copy(RAW_BAD / ep / f"L2-{src or unit}.raw.json", root / ep / f"L2-{unit}.raw.json")
     return FakeRunner(root)
 
 
@@ -171,6 +176,28 @@ def test_the_chapter_slice_input_is_labelled(vault):
     assert [ln.split(" ", 1)[0] for ln in after.strip().splitlines()] == ["35", "36", "37", "38"]
 
 
+def test_the_head_carries_this_chapters_word_budget(vault):
+    """第二轮验收 4：头从六行变八行，两个新键的值按本章算。
+
+    期望值是从 fixture 逐字稿手算出来的固定数（只数汉字，行号 / 时刻 / 说话人
+    前缀不算）：`market` 是第 35–76 行的正文 959 字、目标 959 × 0.2 ≈ 192；
+    `bridge` 是第 1–34 行的 898 字、目标 180。**分隔行、章节地图、三段切片一个
+    字都没变**——这一轮只往头里加两行。
+    """
+    assert run_ep(vault, "EP91", FakeRunner(RAW)) == 0
+    for unit, src, target in (("market", 959, 192), ("bridge", 898, 180)):
+        text = (vault / "_pairs" / "EP91" / f"L2-{unit}.in.md").read_bytes().decode("utf-8")
+        head = text.split("\n---\n", 1)[0].splitlines()
+        assert len(head) == 8, unit
+        assert [ln.split(":", 1)[0] for ln in head] == [
+            "episode", "章节", "标题", "范围", "行号", "说话人",
+            "本章逐字稿", "整理稿目标"], unit
+        assert head[6] == f"本章逐字稿: {src} 字", unit
+        assert head[7] == f"整理稿目标: 约 {target} 字", unit
+        assert target == round(src * 0.2), unit          # SPEC §1.3 的主口径
+        assert text.count("\n---\n") == 2                # 分隔行还是两道
+
+
 # ---------------------------------------------------------------- 验收 4
 
 def test_the_code_fills_ids_times_and_speakers(vault):
@@ -246,6 +273,25 @@ def test_a_stale_topic_table_cannot_stand_in_for_the_chapter_that_just_failed(va
 
 
 # ---------------------------------------------------------------- 验收 6
+
+def test_a_chapter_far_under_budget_still_lands(vault, tmp_path):
+    """第二轮验收 7（红线 2）：正文只有目标字数的十分之一，照样通过、照样写出片段。
+
+    **字数不设闸门**：为了短而删内容比超预算糟得多，而代码判不了「短是因为写法好
+    还是因为把事删了」——判不了的不打回，归 #57 拿 EP02 对着基线判。这里只确认闸
+    门那一侧一个字都没多管。
+    """
+    runner = raw_with(tmp_path, "EP91", "market", src="market-short")
+    assert run_ep(vault, "EP91", runner) == 0
+    assert len(runner.calls) == 3                        # 一趟就过，没有重试
+    assert not (vault / "_failed" / "EP91").exists()
+
+    frags = [digest(vault, "EP91", f"frag-market-0{i}.json") for i in (1, 2, 3)]
+    assert all(f["paras"] for f in frags)                # 段落照样落盘
+    assert paras_chars(frags) * 10 <= 192                # 目标 192 字，写了不到十分之一
+    assert read_frontmatter(note_text(vault, "EP91"))["整理"] == "done"
+    assert len(HEAD_RE.findall(block_of(note_text(vault, "EP91")))) == 4
+
 
 def test_a_gate_violating_chapter_still_passes_l2(vault, tmp_path):
     """闸门违规（引文改写、时间戳越界、丢 hedge）不是 L2 检查的事（#53）：
@@ -383,3 +429,23 @@ def test_stdout_reports_steps_and_counts_only(vault, capsys):
     assert "整理稿已写进" in out and f"整理版本 {L2_VERSION}" in out
     assert "北港大桥收费方案" not in out and "河口晚报" not in out
     assert "十五块" not in out
+
+
+def test_stdout_reports_what_was_written_against_the_budget(vault, capsys):
+    """第二轮验收 6：每章一行报实际对目标，整集末尾报压缩比。
+
+    报的数是从产物的 `paras` 里数出来的，不是随便一个数——不报的话，这一趟整理稿
+    有多长，人只能自己去数（红线 6：只报数，不打印产物内容）。
+    """
+    assert run_ep(vault, "EP91", FakeRunner(RAW)) == 0
+    out = capsys.readouterr().out
+    frags = [digest(vault, "EP91", p.name)
+             for p in sorted((vault / "_digest" / "EP91").glob("frag-*.json"))]
+
+    for unit, src, target, wrote in (("bridge", 898, 180, 653), ("market", 959, 192, 785)):
+        assert paras_chars([f for f in frags if f["chapter"] == unit]) == wrote, unit
+        assert f"正文 {wrote} 字 / 目标 {target} 字（比 {wrote / src:.2f}）" in out, unit
+
+    total, whole = paras_chars(frags), 1857              # 逐字稿全集 1857 个汉字
+    assert total == 1438
+    assert f"正文合计 {total} 字 / 逐字稿 {whole} 字，压缩比 {total / whole:.2f}" in out

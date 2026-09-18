@@ -18,11 +18,12 @@ import time
 from pathlib import Path
 
 from conftest import REPO
-from sm.l2 import (build_input, check_frag, finish, run_l2, schema_for, tidy)
+from sm.l2 import (TARGET_RATIO, body_chars, budget, build_input, check_frag, finish,
+                   hanzi, head_block, paras_chars, run_l2, schema_for, tidy)
 from sm.paths import VaultPaths
 from sm.prov import read_prompt
 from sm.text import hms
-from sm.transcript import build_lines
+from sm.transcript import build_lines, format_lines
 
 PROMPT = REPO / "prompts" / "L2-topic.md"
 NAMES = {"SPEAKER_00": "阿桥（主播）", "SPEAKER_01": "老周（嘉宾）"}
@@ -93,6 +94,82 @@ def test_an_empty_side_drops_its_separator_line():
 
     last = build_input("EP02", CHAPTERS[1], CHAPTERS, LINES, NAMES)
     assert "下文" not in last and "=== 上文" in last
+
+
+# ---------------------------------------------------------------- 字数预算
+
+# 五行合成行表：中英混排、数字、行内空格、纯标点各一处，说话人换两次
+ROWS = [{"n": 41, "t": 1200, "tag": "SPEAKER_00", "text": "北港大桥收费方案今天公布了"},
+        {"n": 42, "t": 1230, "tag": "SPEAKER_00", "text": "DSA 这个组织是二零零一年成立的"},
+        {"n": 43, "t": 1260, "tag": "SPEAKER_01", "text": "去年营收 2.6 亿，同比涨了三成"},
+        {"n": 44, "t": 1290, "tag": "SPEAKER_01", "text": "他说 OK 那  就 这样"},
+        {"n": 45, "t": 1320, "tag": "SPEAKER_00", "text": "——？！对吧"}]
+# 手算：13 + 13 + 11（「亿」是汉字，「2.6」不是）+ 6 + 2
+ROWS_CHARS = 45
+
+
+def test_only_hanzi_are_counted():
+    """验收 1：拉丁词、数字、标点、空白、行首脚手架一个都不算（SPEC §1.3）。
+
+    分子（整理稿正文）和分母（逐字稿）得是同一把尺，比值才跟 0.2 可比；换成按
+    字符数量，比值会随这一章讲什么话题上下漂。
+    """
+    assert hanzi("DSA 这个组织") == 4                     # 拉丁词与空格不算
+    assert hanzi("去年营收 2.6 亿") == 5                  # 数字不算，「亿」算
+    assert hanzi("41 [00:19:00] ") == 0                   # 行号、时刻、空白都不算
+    assert hanzi("——？！，。") == 0 and hanzi(None) == 0
+    assert body_chars(ROWS) == ROWS_CHARS
+
+
+def test_the_line_head_is_not_part_of_the_body():
+    """行号 / `[HH:MM:SS]` / `名: ` 是 `format_lines` 加的脚手架，不是正文。
+
+    说话人名是汉字：从渲染好的文本里数，每换一次说话人就多算两个字，一章下来
+    几十个字的虚高，压缩比跟着虚低。
+    """
+    rendered = format_lines(ROWS, NAMES)
+    assert rendered.splitlines()[0].startswith("41 [00:20:00] 阿桥: ")
+    # 渲染文本里多出来的汉字全是说话人前缀：阿桥 / 老周 / 阿桥，三次共 6 个
+    assert hanzi(rendered) == ROWS_CHARS + 6
+    assert "2.6" in rendered and "DSA" in rendered         # 在文本里，但一个都没算进去
+
+
+def test_paras_chars_counts_inside_the_markers_but_not_the_markers():
+    """验收 2：段首时间戳与两对标记本身不算，标记**包着**的字算。"""
+    one = [{"paras": ["[00:01:00]<who>阿桥</who>说这事<hedge>大概</hedge>成了"]}]
+    assert paras_chars(one) == 9                           # 阿桥说这事大概成了
+    assert paras_chars([{"paras": []}, {"kind": "filler"}]) == 0
+    assert paras_chars([t for t in tidy({"topics": [topic(3), topic(9)]})["topics"]]) == \
+        paras_chars([topic(3)]) + paras_chars([topic(9)])
+
+
+def test_the_head_carries_the_budget():
+    """验收 3：八行、顺序固定；目标 = 本章逐字稿 × 0.2，由代码算、随输入下发。"""
+    head = head_block("EP02", CHAPTERS[1], 41, 120, ["阿桥（主播）"], ROWS).splitlines()
+    assert len(head) == 8
+    assert [ln.split(":")[0] for ln in head[:2]] == ["episode", "章节"]
+    assert head[6] == f"本章逐字稿: {ROWS_CHARS} 字"
+    assert head[7] == f"整理稿目标: 约 {round(ROWS_CHARS * TARGET_RATIO)} 字"
+    assert head[7] == "整理稿目标: 约 9 字"                 # 45 × 0.2
+    assert TARGET_RATIO == 0.2                             # SPEC §1.3 的主口径
+
+
+def test_the_budget_is_not_a_gate():
+    """验收 7（红线 2）：写得再短、再长，`check_frag` 都不打回。
+
+    为了短而删内容比超预算糟得多，而代码判不了「短是因为写法好还是因为把事删
+    了」——判不了的不设闸门，归 #57 拿真实样例对基线判。
+    """
+    src, target = budget(ROWS * 4)                         # 180 字的一章，目标 36 字
+    assert (src, target) == (ROWS_CHARS * 4, 36)
+
+    tenth = topic(3, paras=["[00:01:00] 就这样。"])
+    assert paras_chars([tenth]) * 10 <= target             # 只有目标的十分之一
+    assert check_frag({"topics": [tenth]}, 1, 40) == []
+
+    tenfold = topic(3, paras=[f"[00:01:00] <who>阿桥</who>{'又说了一遍这件事' * 50}"])
+    assert paras_chars([tenfold]) > target * 10            # 十倍于目标，比逐字稿还长
+    assert check_frag({"topics": [tenfold]}, 1, 40) == []
 
 
 # ---------------------------------------------------------------- 形状
@@ -381,6 +458,43 @@ def test_a_runner_that_throws_takes_down_one_chapter_not_the_episode(tmp_path):
     assert "FileNotFoundError" in json.loads(bad.read_bytes().decode("utf-8"))["errors"][0]
 
 
+def test_a_chapter_written_by_an_older_prompt_is_reported_not_rerun(tmp_path):
+    """四问 3：prompt 升了版，已有片段**不自动重跑**——每改一次 prompt 就把整集
+    重烧一遍太贵。但要报一句：不报的话，人手里这份整理稿是哪一版 prompt 写的，
+    除了逐个翻 `provenance` 没有别的办法看出来。
+    """
+    paths = VaultPaths(tmp_path)
+    chapters = [{"id": f"ch{i}", "title": f"第{i}章", "gist": "合成的交接说明",
+                 "start": hms(i * 1800), "end": hms((i + 1) * 1800), "who": ["阿桥"]}
+                for i in range(2)]
+    args = (paths, "EP99", chapters, make_segs(120), NAMES)
+
+    old = SlowRunner(paths.digest("EP99"), delay=0)
+    run_l2(args[0], old, *args[1:], {"path": PROMPT, "version": "L2-topic@0.1"},
+           generated_at="2026-03-12T23:10:00+08:00", log=lambda m: None)
+    assert len(old.calls) == 2
+
+    said: list[str] = []
+    new = SlowRunner(paths.digest("EP99"), delay=0)
+    run_l2(args[0], new, *args[1:], {"path": PROMPT, "version": "L2-topic@0.2"},
+           generated_at="2026-03-12T23:10:00+08:00", log=said.append)
+    assert new.calls == []                               # 跳过，不自动重跑
+    assert [m for m in said if "prompt_version 落后" in m
+            and "L2-topic@0.1 → L2-topic@0.2" in m and "--force" in m]
+
+    # 人照着这句加了 --force：重跑之后片段跟上了当前 prompt，下一趟就不该再唠叨
+    forced = SlowRunner(paths.digest("EP99"), delay=0)
+    run_l2(args[0], forced, *args[1:], {"path": PROMPT, "version": "L2-topic@0.2"},
+           force=True, generated_at="2026-03-12T23:10:00+08:00", log=lambda m: None)
+    assert len(forced.calls) == 2
+
+    quiet: list[str] = []
+    run_l2(args[0], SlowRunner(paths.digest("EP99"), delay=0), *args[1:],
+           {"path": PROMPT, "version": "L2-topic@0.2"},
+           generated_at="2026-03-12T23:10:00+08:00", log=quiet.append)
+    assert not [m for m in quiet if "prompt_version 落后" in m]
+
+
 def test_only_runs_the_chapters_it_is_given(tmp_path):
     """`--only` 归 #55，参数先留着：给了就只跑这几章，其余当没完成（不渲染）。"""
     paths = VaultPaths(tmp_path)
@@ -419,6 +533,24 @@ def test_prompt_does_not_ask_for_what_the_code_already_knows():
     # 代码从行表里填的（例子里九个键一个不多，见下一条）
     assert not re.search(r'"who":\s*\[', text)
     assert "只写行号，不写时刻" in text
+
+
+def test_the_prompt_teaches_the_budget_without_hard_coding_a_number():
+    """验收 5：目标只能引用头里那个数，正文里一个绝对字数都不许有——输入多长是
+    未知的，写死一个数下一集就错（SPEC §1.3）。
+
+    四种省字法写成反例明确禁掉：这一轮在教模型省字，最大的风险就是它拿删内容来
+    达标（红线 2）。
+    """
+    text = PROMPT.read_bytes().decode("utf-8")
+    assert re.match(r"^version: L2-topic@0\.2$", text.splitlines()[0])
+    assert "本章逐字稿" in text and "整理稿目标" in text
+    assert "这是目标，不是上限" in text
+    for banned in ("删话题", "降成 `aside` 或 `filler`", "条目式要点",
+                   "少写 `quotes` / `claims` / `channels`"):
+        assert banned in text, banned
+    for num in (r"12,?000", r"1500", r"3000", r"1\.2\s*万"):
+        assert not re.search(num, text), num
 
 
 def test_the_example_in_the_prompt_passes_the_code_checks():
