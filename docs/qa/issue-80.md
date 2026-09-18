@@ -15,7 +15,7 @@
 
 | 文件 | 做了什么 |
 |---|---|
-| `pc/redecode.py`（新，约 330 行） | 规则层，**纯标准库**。汉字计数 / 语音秒 / 块内空洞 / 复读 / 保留比例 / 判疑似 / 判参选 / 合块 / 阶梯驱动 / `redecode` 报告；解码器以回调注入（`decode(k, start, end, chunk_length)`）。`--demo <样例>` 拿样例里的假解码表跑一遍规则层 |
+| `pc/redecode.py`（新，约 390 行） | 规则层，**纯标准库**。汉字计数 / 语音秒 / 块内空洞 / 复读 / 保留比例 / 判疑似 / 判参选 / 合块 / 阶梯驱动 / `redecode` 报告；解码器以回调注入（`decode(k, start, end, chunk_length)`）。`--demo <样例>` 拿样例里的假解码表跑一遍规则层 |
 | `pc/smpc.py` | `transcribe` 在第一遍收完段之后、写盘之前接上补解：复算 VAD 块 → 真解码器（同一个 `pipe`、同一份 kw，只加 `chunk_length`）→ 替换段与词 → 报告写进 `transcript.json` 顶层、`config` 追加 ` redecode`、日志一行 ASCII。新增 `redecode_pass` / `_redecode` / `ascii_only`，常量 `SR` / `VAD_MIN_SILENCE_MS` |
 | `scripts/setup-pipeline.ps1` | PC 侧上传从只传 `smpc.py` 改成 `smpc.py` + `redecode.py`（静态改，沙箱跑不了 PowerShell） |
 | `SPEC.md` §4 阶段 0 | 补规则层文件名与 `--demo`、合块条件（照抄 `collect_chunks`）、复算失败也跳过且不让转写失败、替换**连起止时刻一起换**、报告字段写全、真跑过才标 `config` |
@@ -163,7 +163,8 @@ transcript.json 顶层 redecode（略去 blocks 的 7 条明细）:
 （`elapsed_s` 在演示里是 `null`：那是 `smpc.py` 给整步计的时，规则层自己不看表。
 `--json` 连 `blocks` 的明细一起打印。）
 
-真机上 `blocks` 里每个疑似块长这样（块 3 的实跑输出）：
+`blocks` 里每个疑似块长这样（仍是上面这条演示命令的输出，合成样例的块 3；真机上
+的形状一样，只是数不同）：
 
 ```json
 {
