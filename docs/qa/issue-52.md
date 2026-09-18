@@ -335,7 +335,7 @@ python scripts\digest.py ep EP02 --vault "D:\obsidian-task\任务栏\story-machi
 | `scripts/digest.py` | `L2 通过` 那行加「正文合计 N 字 / 逐字稿 M 字，压缩比 0.NN」 |
 | `SPEC.md` | §4 L2 的输入多了两行预算，另记字数怎么算、四种禁止的省字法、**字数不设闸门**、日志报什么、prompt 升版只报不重跑；§5.2 记下这份文本的字数数法（行号 / 时刻 / 说话人前缀是脚手架，不计）。§1.3 上一个 commit 已改好，本轮没动 |
 | `tests/fixtures/mkfixtures.py` | 新增 `raw-bad/EP91/L2-market-short.raw.json`：话题、`kind`、锚点全照旧，只把 `paras` 砍到 15 字（`market` 章目标 192 字）。schema 合法，所以跟好响应一样带 `structured_output` |
-| `tests/` | `test_sm_l2.py` +6、`test_s2_topics.py` +3（另有 1 条改判据） |
+| `tests/` | `test_sm_l2.py` +7、`test_s2_topics.py` +3（另有 2 条老用例改了硬编码，见 §6.3 第 9 行） |
 
 **`body_chars` 数的是行表自己的 `text`，不是渲染好的文本**——`format_lines` 印出来的
 `35 [00:19:00] 阿桥: ` 是代码加的脚手架，从渲染文本里数的话，每换一次说话人就多算
@@ -442,6 +442,24 @@ EP02 实跑 `@0.1` 的 0.73 是同一个量级。**这正是这一轮要治的�
 对照组已冻结在 vault：`_lab\EP02-baseline-20260918\`（2026-09-18 那趟的逐字稿、
 58 个 frag、`_pairs`、整理稿正文 40,679 字 / 压缩比 0.73）。
 
+**第一步，什么都别删，先空跑一次**——确认手里这份整理稿确实是 `@0.1` 出的：
+
+```powershell
+python scripts\digest.py ep EP02 --vault "D:\obsidian-task\任务栏\story-machine"
+```
+
+`topics.json` 还在，12 章全跳过、不调 runner、不烧额度，日志里该出现这两行：
+
+```
+    L2：12 章已完成，跳过不调用——要重跑加 --force
+    L2：12 章的 prompt_version 落后于当前 prompt（L2-topic@0.1 → L2-topic@0.2），要重跑加 --force
+```
+
+第二行没出现就说明片段已经是 `@0.2` 出的，不用重跑。**这句只在跳过的章上报**：
+`topics.json` 一删，12 章全成了待跑，它就不会再出现了——所以这一步必须在删之前做。
+
+**第二步，删 `topics.json` 重跑**：
+
 ```powershell
 del "D:\obsidian-task\任务栏\story-machine\_digest\EP02\topics.json"
 python scripts\digest.py ep EP02 --vault "D:\obsidian-task\任务栏\story-machine"
@@ -451,14 +469,7 @@ python scripts\digest.py ep EP02 --vault "D:\obsidian-task\任务栏\story-machi
 文件都在 + 首尾铺满这一章」）；`chapters.json` 还在，L1 会跳过，不重烧那 $0.5。
 **不要用 `--force`**——那会连 L1 一起重跑。
 
-跑之前先确认日志里出现了这一句（没有就说明片段的 `prompt_version` 已经是 `@0.2`，
-你删错了东西）：
-
-```
-    L2：12 章的 prompt_version 落后于当前 prompt（L2-topic@0.1 → L2-topic@0.2），要重跑加 --force
-```
-
-然后看三样：
+跑完看三样：
 
 1. **压缩比**。日志最后一行直接报「正文合计 N 字 / 逐字稿 M 字，压缩比 0.NN」，
    目标是 0.2 上下（基线是 0.73；原型在同一集上做到过 0.214）。每章那一行也各报
