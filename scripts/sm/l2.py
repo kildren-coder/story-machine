@@ -310,12 +310,12 @@ def check_frag(obj, first_line: int, last_line: int) -> list[str]:
             elif not first_line <= ln <= last_line:
                 errs.append(f"{tag}: `line` = {ln} 不在本章的行号里（{first_line}–{last_line}）"
                             f"——行号只能取自「本章」那一段每行行首的那个数")
-        errs += _check_paras(t, tag)
-        errs += _check_items(t, tag)
+        errs += check_paras(t, tag)
+        errs += check_items(t, tag)
     return errs
 
 
-def _check_paras(t: dict, tag: str) -> list[str]:
+def check_paras(t: dict, tag: str) -> list[str]:
     if "paras" not in t:
         return []
     paras = t["paras"]
@@ -338,7 +338,7 @@ def _check_paras(t: dict, tag: str) -> list[str]:
     return errs
 
 
-def _check_items(t: dict, tag: str) -> list[str]:
+def check_items(t: dict, tag: str) -> list[str]:
     errs: list[str] = []
     for key, keys in ITEM_KEYS.items():
         if key not in t:
@@ -438,7 +438,12 @@ def topics_doc(ep: str, chapters: list[dict], done: dict, *, model: str, effort:
 
 # ---------------------------------------------------------------- 跑一集
 
-def _write_json(path: Path, obj) -> None:
+def json_bytes(obj) -> bytes:
+    """`_digest/` 里 JSON 产物的字节形状。L3 拿它比「写回前后有没有真变」。"""
+    return (json.dumps(obj, ensure_ascii=False, indent=1) + "\n").encode("utf-8")
+
+
+def write_json(path: Path, obj) -> None:
     """先写临时文件再 `os.replace`——落盘要么是旧的一整份，要么是新的一整份。
 
     `topics.json` 每完成一章就重写一次，而它同时是「这一章跑没跑过」的判据：
@@ -448,7 +453,7 @@ def _write_json(path: Path, obj) -> None:
     """
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_name(path.name + ".tmp")
-    tmp.write_bytes((json.dumps(obj, ensure_ascii=False, indent=1) + "\n").encode("utf-8"))
+    tmp.write_bytes(json_bytes(obj))
     os.replace(tmp, path)
 
 
@@ -603,7 +608,7 @@ def run_l2(paths, runner, ep: str, chapters: list[dict], segments: list[dict],
                 if obj is None:
                     failed.append(c["id"])
                     if crashed:                       # call_layer 没来得及留档，补一份
-                        _write_json(paths.failed(ep) / f"{LAYER}-{c['id']}.failed.json",
+                        write_json(paths.failed(ep) / f"{LAYER}-{c['id']}.failed.json",
                                     {"scope": ep, "layer": LAYER, "unit": c["id"],
                                      "failed_at": generated_at or now_iso(),
                                      "errors": errors, "envelope": envelope})
@@ -619,13 +624,13 @@ def run_l2(paths, runner, ep: str, chapters: list[dict], segments: list[dict],
                 dropped = drop_chapter_frags(digest_dir, c["id"])
                 for frag in frags:
                     frag["provenance"] = prov
-                    _write_json(digest_dir / f"frag-{frag['id']}.json", frag)
+                    write_json(digest_dir / f"frag-{frag['id']}.json", frag)
                 done[c["id"]] = frags
                 dirty = True
                 doc = topics_doc(ep, chs, done, model=model, effort=effort,
                                  prompt_version=prompt["version"],
                                  generated_at=generated_at)
-                _write_json(digest_dir / "topics.json", doc)
+                write_json(digest_dir / "topics.json", doc)
                 kinds = "、".join(f"{k} {sum(1 for f in frags if f['kind'] == k)}"
                                  for k in KINDS)
                 # 实际正文对目标：报出来人才知道这一趟压到了多少（红线 6：只报数，
@@ -640,7 +645,7 @@ def run_l2(paths, runner, ep: str, chapters: list[dict], segments: list[dict],
     if dirty and doc is None:                         # 只清了孤儿、没有章跑过
         doc = topics_doc(ep, chs, done, model=model, effort=effort,
                          prompt_version=prompt["version"], generated_at=generated_at)
-        _write_json(digest_dir / "topics.json", doc)
+        write_json(digest_dir / "topics.json", doc)
     if doc is None:
         # 这一趟没有一章写成（全都跳过了，或者跑过的全挂了）：盘上那份话题表还停在
         # 上一趟。**只认这一趟真拿到片段的章**——失败的那些章，旧表里有它们的话题、
