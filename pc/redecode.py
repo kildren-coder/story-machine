@@ -40,6 +40,7 @@ MIN_GAIN_HAN = 20           # 新版至少比原文多这么多汉字才参选
 MIN_KEPT = 0.8              # 原文汉字按序出现在新版里的比例下限
 MAX_REP4 = 5                # 同一个 4 字汉字串的出现次数上限，超了算复读
 MAX_CHUNK_SPEECH_S = 30     # 合块上限（照抄 faster_whisper.vad.collect_chunks）
+GROUP_EPS_S = 1e-6          # 合块判界的浮点容差：远小于一个样点（1/16000 s），见 group_chunks
 
 HAN = re.compile(r"[一-鿿]")            # 字数一律数汉字（SPEC §1.3）
 WS = re.compile(r"\s+")
@@ -147,11 +148,16 @@ def group_chunks(speech, max_speech_s=MAX_CHUNK_SPEECH_S):
 
     只抄条件，不抄它返回的 segments 元数据：那份元数据每开一个新块都会漏记该块的
     第一段，拿来跟第一遍的段对位会整体错位。
+
+    判界带 GROUP_EPS_S 容差：collect_chunks 在整数样点上比「> 30 s」，这里是浮点秒。
+    累计恰好等于 30.000 s 的块每集都会出现（VAD 强切 + 两侧补齐正好 480000 样点），
+    浮点累加会算成 30.000000000000004，不加容差就会在这里多切一刀，后面的块整体错位，
+    整步被判「段数 ≠ 块数」跳过。
     """
     out, cur, acc = [], [], 0.0
     for s, e in speech:
         s, e = float(s), float(e)
-        if cur and acc + (e - s) > max_speech_s:
+        if cur and acc + (e - s) > max_speech_s + GROUP_EPS_S:
             out.append(cur)
             cur, acc = [], 0.0
         cur.append([s, e])

@@ -1,7 +1,8 @@
 # QA — issue #80 阶段 0 转写：吞块补解（疑似吞块逐级切短重解 15→10→7 秒）
 
-分支 `agent/issue-80`。沙箱内 `bash scripts/test.sh` 全绿（159 个 pytest 用例：
-原有 118 + 本票 41），没有调用过 `claude -p`，没有碰过 vault，没有 GPU / 音频参与。
+分支 `agent/issue-80`。沙箱内 `bash scripts/test.sh` 全绿（160 个 pytest 用例：
+原有 118 + 本票 42），没有调用过 `claude -p`，没有碰过 vault，没有 GPU / 音频参与。
+合并前评审在本机与 PC 上另做的实证见第 6 节。
 样例是 `tests/fixtures/redecode/EP93.redecode.json`（合成，内容虚构，红线 10；它与
 生成脚本在 #80 落 SPEC 那一笔里已经进仓库，本票只消费它）。
 
@@ -19,7 +20,7 @@
 | `pc/smpc.py` | `transcribe` 在第一遍收完段之后、写盘之前接上补解：复算 VAD 块 → 真解码器（同一个 `pipe`、同一份 kw，只加 `chunk_length`）→ 替换段与词 → 报告写进 `transcript.json` 顶层、`config` 追加 ` redecode`、日志一行 ASCII。新增 `redecode_pass` / `_redecode` / `ascii_only`，常量 `SR` / `VAD_MIN_SILENCE_MS` |
 | `scripts/setup-pipeline.ps1` | PC 侧上传从只传 `smpc.py` 改成 `smpc.py` + `redecode.py`（静态改，沙箱跑不了 PowerShell） |
 | `SPEC.md` §4 阶段 0 | 补规则层文件名与 `--demo`、合块条件（照抄 `collect_chunks`）、复算失败也跳过且不让转写失败、替换**连起止时刻一起换**、报告字段写全、真跑过才标 `config` |
-| `tests/test_pc_redecode.py`（新，41 个用例） | 验收 1–10 逐条 + 合块 + smpc 接线（假 `faster_whisper` / 假 `pipe`） |
+| `tests/test_pc_redecode.py`（新，42 个用例） | 验收 1–10 逐条 + 合块（含恰好 30 s 的判界）+ smpc 接线（假 `faster_whisper` / 假 `pipe`） |
 
 `pc/` 不在 `tests/conftest.py` 的 `sys.path` 里（那份只管 `scripts/`），测试文件自己加。
 
@@ -211,11 +212,11 @@ ssh 5070 "C:\asr\venv\Scripts\python.exe -c ""import sys; sys.path.insert(0,'C:/
 
 ```
     redecode: chunks=449 segments=449
-    redecode: suspects=33 replaced=30 residual=3 errors=0 han=39535->42985 in 121s
+    redecode: suspects=33 replaced=30 residual=3 errors=0 han=54007->57232 in 121s
     segments=449  191.0min in 251s (45.7x realtime)  t2s=1234 chars
 ```
 
-逐项对照（数量级取自 EP02 的实验，#80 正文）：
+逐项对照（数量级取自 EP02 的实验与第 6 节的干跑）：
 
 - **`chunks=N segments=M` 两个数必须相等。** 不等就会在下一行看到
   `redecode: skipped (segments != chunks (449 vs 452))`，补解整步没跑，正本与旧流程
@@ -286,3 +287,54 @@ python .\pc\check_diar.py EP03
   各层的 golden 样例，重转等于把 L1–L3 的基线一起换掉。
 - 中途中断不会留下半份产物：补解在写盘之前，什么都没落盘，整步重来即可
   （`.\scripts\worker.ps1 -Retry EP03`）。
+
+---
+
+## 6. 合并前评审补验（2026-09-19，本机 + PC；不在沙箱范围）
+
+沙箱验不了的两条，合并前用真机数据补验过。脚本与产物只在本机 / PC，不进仓库。
+
+### 6.1 复算的块数 = 第一遍的段数（第 3 节风险 1）
+
+PC 上只跑 VAD（CPU，不解码、不写正本），拿本 PR 的 `redecode.group_chunks` 复算，
+与已有正本的段数对照：
+
+| 集 | VAD 语音区间 | 复算块数 | 正本段数 | 累计恰好 30.000 s 的块 |
+|---|---|---|---|---|
+| EP01 | 1,492 | 321 | 321 | 2 |
+| EP02 | 2,139 | 449 | 449 | 1 |
+| EP03 | 806 | 52 | 52 | 0 |
+
+三集全部对上。最后一列是评审逮到的边：`collect_chunks` 在整数样点上比「> 480000」，
+`group_chunks` 在浮点秒上比「> 30」——累计恰好 480000 样点的块（VAD 强切加两侧补齐
+正好凑出）浮点累加得 `30.000000000000004`，会多切一刀，后面的块整体错位，整步被判
+「段数 ≠ 块数」跳过。这三集是运气好没撞上（同一批样点换个顺序累加就会撞）。已修：判界
+加 `GROUP_EPS_S = 1e-6`（远小于一个样点），配用例
+`test_grouping_judges_an_exact_thirty_second_sum_like_collect_chunks_does`（未修版多切一刀，
+480001 样点仍会切）。
+
+### 6.2 把规则层套在 EP02 真实数据上干跑
+
+`redecode.run` 不改，解码器换成查表：09-18 实验里已经解好的 15 s / 10 s 版本
+（`D:\asr-exp\rechunk-a.json` / `rechunk-a10.json`，31 块）；7 s 与实验没解过的块一律
+抛异常。段与词用 `pass1-rerun`（与生产正本逐字相同）。
+
+```
+chunks=449 segments=449 words=449   skipped: None
+suspects=33 replaced=30 residual=3 errors=7 han=54007->57232 (+3225)
+picked: 15 s × 24，10 s × 6，残留 × 3
+```
+
+- 疑似 33 块 = 实验按密度判出的 31 块 + 靠空洞判出的 2 块（73、389；实验没解过它们，
+  三级都报「无数据」，所以 `errors=7` 全是查表缺项，不是规则层的错）。
+- 残留 3 块：47 两级增益只有 16 / 15 汉字（< 20），真机上会走到 7 s；73、389 无数据。
+- 未替换的 419 块是同一对象带回（逐字节不变）；30 个替换块「词拼起来 = 段文本」
+  全部成立，起止时刻都落在块内。
+- 补回 +3,225 汉字，与 #80 正文的「约 3450」同一量级（差的是 47 那一块的 15/10 s 版
+  被本 PR 更严的参选条件拦下了）。
+
+### 6.3 顺手对齐的一处
+
+生成脚本 `mk_redecode.py` 的 `kept()` 原来是 `sum / max(1, len(o))`（原文 0 汉字 → 0.0），
+与 `pc/redecode.kept_ratio` 的 1.0 不同口径（第 2 节末尾那条）。改成同口径；重生成样例
+逐字节不变。

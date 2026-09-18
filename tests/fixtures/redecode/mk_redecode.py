@@ -172,8 +172,10 @@ def rep4(text):
 
 def kept(old, new):
     o, n = han(old), han(new)
+    if not o:
+        return 1.0      # 与 pc/redecode.kept_ratio 同口径：原文一个汉字都没有时「全都在」
     m = difflib.SequenceMatcher(None, o, n, autojunk=False).get_matching_blocks()
-    return sum(b.size for b in m) / max(1, len(o))
+    return sum(b.size for b in m) / len(o)
 
 
 def simulate(ch, text, words, decodes):

@@ -456,6 +456,27 @@ def test_grouping_edge_cases():
     assert len(redecode.group_chunks([[0.0, 45.0], [46.0, 47.0]])) == 2
 
 
+# 六段语音，样点数加起来恰好 480000 = 30.000 s（VAD 强切加两侧补齐就会凑出这种块；
+# EP01 有 2 处、EP02 有 1 处）。collect_chunks 在整数样点上比「> 480000」判成不超；
+# 换成浮点秒累加得 30.000000000000004，没有容差就会多切一刀，后面全部错位。
+EXACT_30S_SAMPLES = [(3552, 34756), (65161, 214182), (221760, 294041),
+                     (312813, 338642), (347586, 386116), (425229, 588364)]
+SR = 16000
+
+
+def test_grouping_judges_an_exact_thirty_second_sum_like_collect_chunks_does():
+    assert sum(b - a for a, b in EXACT_30S_SAMPLES) == 30 * SR
+    speech = [[a / SR, b / SR] for a, b in EXACT_30S_SAMPLES]
+    acc = 0.0
+    for s, e in speech:
+        acc += e - s
+    assert acc > 30.0                       # 浮点累加确实越界了——这就是要防的那一下
+    assert len(redecode.group_chunks(speech)) == 1
+    # 真多一个样点就该切：容差不能大到把 480001 也放过
+    over = EXACT_30S_SAMPLES[:-1] + [(425229, 588365)]
+    assert len(redecode.group_chunks([[a / SR, b / SR] for a, b in over])) == 2
+
+
 def test_grouping_keeps_every_speech_interval_exactly_once():
     doc = load()
     speech = [iv for c in doc["chunks"] for iv in c["speech"]]
