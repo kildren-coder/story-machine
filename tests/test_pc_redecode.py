@@ -10,9 +10,11 @@ from __future__ import annotations
 
 import ast
 import copy
+import io
 import json
 import subprocess
 import sys
+import types
 from pathlib import Path
 
 import pytest
@@ -458,3 +460,141 @@ def test_grouping_keeps_every_speech_interval_exactly_once():
     assert [iv for c in redecode.group_chunks(speech) for iv in c["speech"]] == speech
 
 
+# ---------------------------------------------------------------- smpc.py 的接线
+@pytest.fixture(scope="module")
+def smpc():
+    """import 时要 reconfigure stdout；给它一个真 TextIOWrapper，别赌 pytest 的捕获对象。"""
+    real = sys.stdout
+    sys.stdout = io.TextIOWrapper(io.BytesIO(), encoding="utf-8")
+    try:
+        import smpc as mod
+    finally:
+        sys.stdout = real
+    return mod
+
+
+class FakeWord:
+    def __init__(self, start, end, word):
+        self.start, self.end, self.word = start, end, word
+
+
+class FakeSeg:
+    def __init__(self, start, end, text, words):
+        self.start, self.end, self.text, self.words = start, end, text, words
+
+
+# 一个繁体字（遷）：用来证明重解出来的文本和词都过了同一张 t2s 字表
+HEARD = "河口夜市搬遷以后生意变差了不少老周说货车的费率明年还要再涨一点"
+
+
+class FakePipe:
+    """只记下自己被怎么调的；不解码。"""
+    def __init__(self):
+        self.last_speech_timestamp = 7.5       # 上一次调用留下的脏值
+        self.calls = []
+
+    def transcribe(self, audio, **kw):
+        self.calls.append({"n": len(audio), "head": audio[0], "kw": dict(kw),
+                           "last_speech_timestamp": self.last_speech_timestamp})
+        self.last_speech_timestamp = 99.0      # 不清零就会拖进下一块
+        words = [FakeWord(0.5, 10.5, HEARD[:10]), FakeWord(10.5, 20.5, HEARD[10:20]),
+                 FakeWord(20.5, 24.5, HEARD[20:])]
+        return [FakeSeg(0.5, 24.5, HEARD, words)], object()
+
+
+def fake_faster_whisper(monkeypatch, pcm, speech_samples):
+    audio_mod = types.ModuleType("faster_whisper.audio")
+    audio_mod.decode_audio = lambda path, sampling_rate=16000: pcm
+    vad_mod = types.ModuleType("faster_whisper.vad")
+    seen = {}
+
+    class VadOptions:
+        def __init__(self, **kw):
+            seen.update(kw)
+
+    vad_mod.VadOptions = VadOptions
+    vad_mod.get_speech_timestamps = lambda a, opts: [{"start": s, "end": e}
+                                                     for s, e in speech_samples]
+    pkg = types.ModuleType("faster_whisper")
+    pkg.audio, pkg.vad = audio_mod, vad_mod
+    for name, mod in (("faster_whisper", pkg), ("faster_whisper.audio", audio_mod),
+                      ("faster_whisper.vad", vad_mod)):
+        monkeypatch.setitem(sys.modules, name, mod)
+    return seen
+
+
+def test_smpc_recomputes_the_blocks_and_redecodes_the_swallowed_one(smpc, monkeypatch):
+    sr = smpc.SR
+    pcm = list(range(100 * sr))                       # 100 秒「音频」，切片看得出边界
+    speech = [(0 * sr, 25 * sr), (30 * sr, 55 * sr)]  # 两块，各 25 秒语音
+    seen = fake_faster_whisper(monkeypatch, pcm, speech)
+    monkeypatch.setattr(smpc, "to_simplified", lambda t: t.replace("遷", "迁"))
+
+    intact = ("河口夜市搬迁以后生意变差了不少老周说货车的费率明年还要再涨一点"
+              "阿桥在弹幕里问大桥什么时候通车我觉得这件事情还要再等一等看看"
+              "河口市上个礼拜刚刚发了一个新通知")   # 密度够、无空洞 → 不疑似
+    segments = [{"start": 0.0, "end": 24.5, "speaker": None, "text": intact},
+                {"start": 30.0, "end": 31.0, "speaker": None, "text": "河口夜市"}]
+    words = [[[0.0, 24.5, intact]], [[30.0, 31.0, "河口夜市"]]]
+    pipe = FakePipe()
+    kw = {"language": "zh", "vad_filter": True, "word_timestamps": True, "batch_size": 16}
+
+    segs, ws, rep = smpc.redecode_pass(pipe, "EP93.m4a", kw, segments, words, 100.0)
+
+    assert seen == {"max_speech_duration_s": 30, "min_silence_duration_ms": 160}
+    assert rep["skipped"] is None and rep["chunks"] == 2
+    assert (rep["suspects"], rep["replaced"], rep["errors"]) == (1, 1, 0)
+    assert kw == {"language": "zh", "vad_filter": True, "word_timestamps": True,
+                  "batch_size": 16}, "第一遍的 kw 不许被就地改"
+
+    # 只加 chunk_length，逐级走；每一级调用前 last_speech_timestamp 都清零
+    assert [c["kw"] for c in pipe.calls] == [dict(kw, chunk_length=x) for x in (15, 10, 7)]
+    assert [c["last_speech_timestamp"] for c in pipe.calls] == [0, 0, 0]
+    assert [(c["n"], c["head"]) for c in pipe.calls] == [(25 * sr, 30 * sr)] * 3
+    # 时间加块起点；文本和词都过同一个 t2s（遷 → 迁）
+    assert segs[1]["text"] == HEARD.replace("遷", "迁")
+    assert (segs[1]["start"], segs[1]["end"]) == (30.5, 54.5)
+    assert ws[1] == [[30.5, 40.5, "河口夜市搬迁以后生意"], [40.5, 50.5, "变差了不少老周说货车"],
+                     [50.5, 54.5, "的费率明年还要再涨一点"]]
+    assert "".join(w[2] for w in ws[1]) == segs[1]["text"]
+    assert segs[0] is segments[0] and ws[0] is words[0]      # 另一块一个字节没动
+    assert rep["elapsed_s"] is not None
+    # 31 字 / 25 秒还是不到 3 字/秒：补回来了但仍疑似，记残留，不再重试
+    assert rep["residual"] == 1 and rep["blocks"][0]["picked"] == 15
+
+
+def test_smpc_skips_the_step_when_the_vad_recompute_blows_up(smpc, monkeypatch):
+    fake_faster_whisper(monkeypatch, [], [])
+    monkeypatch.setattr(sys.modules["faster_whisper.audio"], "decode_audio",
+                        lambda *a, **k: (_ for _ in ()).throw(OSError("ffmpeg not found")))
+    segments = [{"start": 0.0, "end": 1.0, "speaker": None, "text": "河口夜市"}]
+    pipe = FakePipe()
+    segs, ws, rep = smpc.redecode_pass(pipe, "EP93.m4a", {}, segments, [[]], 10.0)
+    assert "vad recompute failed" in rep["skipped"] and "ffmpeg not found" in rep["skipped"]
+    assert (segs, ws) == (segments, [[]]) and pipe.calls == []
+    assert rep["replaced"] == 0 and rep["blocks"] == []
+    assert smpc.ascii_only(rep["skipped"]).isascii()
+
+
+def test_smpc_writes_the_report_and_marks_the_config(smpc):
+    """`config` 只在补解真跑了的时候才追加 ` redecode`；跳过了不许冒充跑过。"""
+    src = (REPO / "pc" / "smpc.py").read_bytes().decode("utf-8")
+    assert '"redecode": red,' in src
+    assert '("" if red["skipped"] else " redecode")' in src
+    # 补解在写盘之前：正本一旦落地就不可变，不回补
+    assert src.index("redecode_pass(pipe") < src.index("dest.write_text")
+    assert src.index("redecode_pass(pipe") < src.index('ep + ".words.json"')
+
+
+def test_the_worker_log_line_is_plain_ascii(smpc):
+    line = ("redecode: suspects=%d replaced=%d residual=%d errors=%d han=%d->%d in %.0fs"
+            % (33, 30, 3, 1, 39535, 42985, 121.4))
+    assert line.isascii()
+    assert smpc.ascii_only("补解 failed: 找不到 ffmpeg").isascii()
+
+
+def test_setup_pipeline_ships_redecode_next_to_smpc():
+    """smpc.py import redecode——少传一个，PC 上连 download 都起不来。"""
+    ps1 = (REPO / "scripts" / "setup-pipeline.ps1").read_bytes().decode("utf-8")
+    assert "'smpc.py', 'redecode.py'" in ps1
+    assert 'Join-Path $Repo "pc\\$f"' in ps1

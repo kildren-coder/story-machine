@@ -219,9 +219,12 @@ else {
     if ($LASTEXITCODE -ne 0) { throw "无法创建 E:\asr\staged" }
     Say "E:\asr\staged 就绪" Green
 
-    & scp -q (Join-Path $Repo "pc\smpc.py") "${Host5070}:C:/asr/smpc.py"
-    if ($LASTEXITCODE -ne 0) { throw "smpc.py 上传失败" }
-    Say "C:\asr\smpc.py 已更新" Green
+    # redecode.py 是 smpc.py 的 import，少传一个 smpc.py 连 download 都起不来
+    foreach ($f in 'smpc.py', 'redecode.py') {
+        & scp -q (Join-Path $Repo "pc\$f") "${Host5070}:C:/asr/$f"
+        if ($LASTEXITCODE -ne 0) { throw "$f 上传失败" }
+        Say "C:\asr\$f 已更新" Green
+    }
 
     $ver = & ssh $Host5070 "C:\asr\venv\Scripts\python.exe -c `"import faster_whisper,sys;print('fw',faster_whisper.__version__)`"" 2>&1
     Say "转写环境：$ver" Green

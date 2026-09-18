@@ -31,6 +31,8 @@ import subprocess
 import sys
 import time
 
+import redecode          # 同目录，纯标准库；缺了要当场炸，别等转写完才发现补解没上
+
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 AUDIO_DIR = pathlib.Path(r"E:\asr\audio")
@@ -41,6 +43,9 @@ HOTWORDS = pathlib.Path(r"E:\asr\hotwords.json")
 
 # faster-whisper 源码实证的静默截断上限（max_length // 2 - 1），超出无告警丢弃。见 SPEC §4 阶段0。
 HOTWORDS_TOKEN_LIMIT = 223
+
+SR = 16000                  # faster-whisper 的工作采样率
+VAD_MIN_SILENCE_MS = 160    # 复算块时要跟 batched 管线同一套 VAD 参数
 
 
 def out(kind, *parts):
@@ -276,6 +281,61 @@ def load_hotwords(model):
     return text or None
 
 
+def ascii_only(text):
+    """worker 的行协议只认 ASCII（本文件头第 2 条）。异常消息不一定是。"""
+    return str(text).encode("ascii", "replace").decode("ascii")
+
+
+def redecode_pass(pipe, pcm_path, kw, segments, words_side, total_s):
+    """吞块补解（SPEC §4 阶段 0）：疑似被吞的块换个切法再听一遍。
+
+    在第一遍收完段之后、写盘之前做——正本一写盘就永久不可变，不回补。
+    返回 (segments, words_side, 报告)。**这一步失败绝不让转写失败**：报告标
+    skipped、日志报原因，正本照常写盘。
+    """
+    t0 = time.time()
+    try:
+        from faster_whisper.audio import decode_audio
+        from faster_whisper.vad import VadOptions, get_speech_timestamps
+        # 管线内部不把块交出来，只能拿同一套 VAD 参数复算一遍。合块条件在
+        # redecode.group_chunks 里，照抄 vad.collect_chunks（它自己的 segments
+        # 元数据不能用：每开一个新块都会漏记该块的第一段）。
+        pcm = decode_audio(str(pcm_path), sampling_rate=SR)
+        vad = VadOptions(max_speech_duration_s=redecode.MAX_CHUNK_SPEECH_S,
+                         min_silence_duration_ms=VAD_MIN_SILENCE_MS)
+        speech = [[t["start"] / SR, t["end"] / SR]
+                  for t in get_speech_timestamps(pcm, vad)]
+        chunks = redecode.group_chunks(speech)
+    except Exception as e:
+        return segments, words_side, redecode.skipped(
+            "vad recompute failed: %r" % (e,), segments)
+
+    info("redecode: chunks=%d segments=%d" % (len(chunks), len(segments)))
+
+    def decode(k, start, end, length):
+        """把块 k 的原始时间跨度单独拿出来重解一遍：冻结配置只改 chunk_length。"""
+        pipe.last_speech_timestamp = 0     # 不清零的话上一次调用的尾巴会拖进这一块
+        segs, _ = pipe.transcribe(pcm[int(start * SR):int(end * SR)],
+                                  **dict(kw, chunk_length=length))
+        out_segs, out_words = [], []
+        for s in segs:                     # 时间加块起点；文本和词过同一张 t2s 字表
+            out_segs.append({"start": round(s.start + start, 2),
+                             "end": round(s.end + start, 2),
+                             "text": to_simplified(s.text)})
+            out_words.append([[round(w.start + start, 2), round(w.end + start, 2),
+                               to_simplified(w.word)] for w in (s.words or [])])
+        return out_segs, out_words
+
+    def progress(done, total, chunk):
+        # 单位跟第一遍一样是秒：进度条会退回去再爬一遍音频，那正是这一步在干的事
+        out("PROGRESS", "%.1f" % chunk["end"], "%.1f" % total_s)
+
+    segments, words_side, rep = redecode.run(chunks, segments, words_side,
+                                             decode, progress)
+    rep["elapsed_s"] = round(time.time() - t0, 1)
+    return segments, words_side, rep
+
+
 def cmd_transcribe(ep):
     STAGE_DIR.mkdir(parents=True, exist_ok=True)
     cands = [p for p in STAGE_DIR.glob(ep + ".*")
@@ -328,13 +388,16 @@ def cmd_transcribe(ep):
             out("PROGRESS", "%.1f" % s.end, "%.1f" % total)
     t_run = time.time() - t0
 
+    segments, words_side, red = redecode_pass(pipe, audio, kw, segments, words_side, total)
+
     doc = {
         "ep": ep,
         "audio": audio.name,
         "duration_s": round(total, 1),
         "engine": "faster-whisper large-v3",
         "config": "float16 batched bs16 vad word_ts zh"
-                  + (" hotwords" if hotwords else ""),
+                  + (" hotwords" if hotwords else "")
+                  + ("" if red["skipped"] else " redecode"),
         "diarization": "pending",     # 显式标记：不是忘了，是这一步还没跑
         "orthography": "opencc t2s 逐字",   # 缺这个字段 = 这一集早于字形归一，别信它的字形
         "orthography_chars": n_t2s,
@@ -342,6 +405,7 @@ def cmd_transcribe(ep):
         "load_s": round(t_load, 1),
         "transcribe_s": round(t_run, 1),
         "realtime_factor": round(total / t_run, 1) if t_run else None,
+        "redecode": red,
         "segments": segments,
     }
     dest = STAGE_DIR / (ep + ".transcript.json")
@@ -353,6 +417,12 @@ def cmd_transcribe(ep):
         json.dumps({"ep": ep, "segments": words_side}, ensure_ascii=False),
         encoding="utf-8")
 
+    if red["skipped"]:
+        info("redecode: skipped (%s)" % ascii_only(red["skipped"]))
+    else:
+        info("redecode: suspects=%d replaced=%d residual=%d errors=%d han=%d->%d in %.0fs"
+             % (red["suspects"], red["replaced"], red["residual"], red["errors"],
+                red["han_before"], red["han_after"], red["elapsed_s"] or 0))
     info("segments=%d  %.1fmin in %.0fs (%.1fx realtime)  t2s=%d chars"
          % (len(segments), total / 60, t_run, total / t_run if t_run else 0, n_t2s))
     out("PROGRESS", "%.1f" % total, "%.1f" % total)
