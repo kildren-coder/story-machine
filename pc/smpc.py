@@ -299,6 +299,9 @@ def redecode_pass(pipe, pcm_path, kw, segments, words_side, total_s):
     t0 = time.time()
     try:
         segs, words, rep = _redecode(pipe, pcm_path, kw, segments, words_side, total_s)
+        # 段、词、报告都要进正本：序列化不了就等于整步失败，在这里失败而不是写盘时——
+        # 真机上 faster-whisper 的时刻是 numpy 标量，规则层漏一个 numpy bool 出来就是这一下
+        json.dumps([segs, words, rep])
     except Exception as e:
         segs, words, rep = segments, words_side, redecode.skipped(
             "redecode failed: %r" % (e,), segments)

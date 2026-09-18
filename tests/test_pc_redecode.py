@@ -638,3 +638,70 @@ def test_setup_pipeline_ships_redecode_next_to_smpc():
     ps1 = (REPO / "scripts" / "setup-pipeline.ps1").read_bytes().decode("utf-8")
     assert "'smpc.py', 'redecode.py'" in ps1
     assert 'Join-Path $Repo "pc\\$f"' in ps1
+
+
+# ---------------------------------------------------------------- 真机逮到的：numpy 标量进了报告
+# 沙箱没有 numpy，用两个替身仿它的两条性质：float64 是 float 的子类，但算术和比较吐的
+# 仍是 numpy 类型；numpy 的 bool 不是 Python bool（json 不认）。
+class NpBool:
+    def __init__(self, v):
+        self.v = bool(v)
+
+    def __bool__(self):
+        return self.v
+
+
+class NpFloat(float):
+    def __add__(self, o):
+        return NpFloat(float(self) + float(o))
+
+    __radd__ = __add__
+
+    def __sub__(self, o):
+        return NpFloat(float(self) - float(o))
+
+    def __rsub__(self, o):
+        return NpFloat(float(o) - float(self))
+
+    def __lt__(self, o):
+        return NpBool(float(self) < float(o))
+
+    def __le__(self, o):
+        return NpBool(float(self) <= float(o))
+
+    def __gt__(self, o):
+        return NpBool(float(self) > float(o))
+
+    def __ge__(self, o):
+        return NpBool(float(self) >= float(o))
+
+
+def test_the_report_is_json_serialisable_when_word_times_are_numpy_scalars():
+    """EP02 音频真跑逮到的：词时刻是 numpy 标量 → 空洞是 numpy float → `residual` 是
+    numpy bool → 写正本时 `TypeError: Object of type bool is not JSON serializable`，
+    几分钟 GPU 白跑、一个字都没落盘。规则层的量一律收成内建类型。"""
+    doc = load()
+    words = [[[NpFloat(w[0]), NpFloat(w[1]), w[2]] for w in ws] for ws in doc["words"]["segments"]]
+    assert not isinstance(NpFloat(1.0) >= 0.5, bool)           # 替身确实仿到了那条性质
+    decode, _ = redecode.demo_decoder(doc)
+    _, _, rep = redecode.run(doc["chunks"], doc["transcript"]["segments"], words, decode)
+    json.dumps(rep)
+    for b in rep["blocks"]:
+        assert type(b["residual"]) is bool, b["k"]
+        assert type(b["before"]["gap"]) is float and type(b["speech_s"]) is float, b["k"]
+    ch = doc["chunks"][4]
+    assert type(redecode.gap_s(ch, words[4])) is float
+    assert type(redecode.is_suspect(ch, doc["transcript"]["segments"][4]["text"], words[4])) is bool
+
+
+def test_smpc_drops_what_it_cannot_serialise_instead_of_crashing_at_write_time(smpc, monkeypatch):
+    """兜底的兜底：规则层再漏出什么 json 不认的东西，也要在补解这一步失败，不能拖到写盘。"""
+    segments = [{"start": 0.0, "end": 1.0, "speaker": None, "text": "河口夜市"}]
+    words = [[[0.0, 1.0, "河口夜市"]]]
+    poisoned = ([dict(segments[0], text="河口夜市搬迁")], words,
+                dict(redecode.skipped(None, segments), blocks=[{"residual": NpBool(True)}]))
+    monkeypatch.setattr(smpc, "_redecode", lambda *a: poisoned)
+    segs, ws, rep = smpc.redecode_pass(FakePipe(), "EP93.m4a", {}, segments, words, 10.0)
+    assert rep["skipped"].startswith("redecode failed: TypeError")
+    assert segs is segments and ws is words and segs[0]["text"] == "河口夜市"
+    json.dumps([segs, ws, rep])

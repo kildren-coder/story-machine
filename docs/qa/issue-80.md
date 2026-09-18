@@ -1,8 +1,8 @@
 # QA — issue #80 阶段 0 转写：吞块补解（疑似吞块逐级切短重解 15→10→7 秒）
 
-分支 `agent/issue-80`。沙箱内 `bash scripts/test.sh` 全绿（160 个 pytest 用例：
-原有 118 + 本票 42），没有调用过 `claude -p`，没有碰过 vault，没有 GPU / 音频参与。
-合并前评审在本机与 PC 上另做的实证见第 6 节。
+分支 `agent/issue-80`。沙箱内 `bash scripts/test.sh` 全绿（162 个 pytest 用例：
+原有 118 + 本票 44），没有调用过 `claude -p`，没有碰过 vault，没有 GPU / 音频参与。
+合并前评审在本机与 PC 上另做的实证见第 6 节——**其中 6.4 是沙箱永远逮不到的那种**。
 样例是 `tests/fixtures/redecode/EP93.redecode.json`（合成，内容虚构，红线 10；它与
 生成脚本在 #80 落 SPEC 那一笔里已经进仓库，本票只消费它）。
 
@@ -20,7 +20,7 @@
 | `pc/smpc.py` | `transcribe` 在第一遍收完段之后、写盘之前接上补解：复算 VAD 块 → 真解码器（同一个 `pipe`、同一份 kw，只加 `chunk_length`）→ 替换段与词 → 报告写进 `transcript.json` 顶层、`config` 追加 ` redecode`、日志一行 ASCII。新增 `redecode_pass` / `_redecode` / `ascii_only`，常量 `SR` / `VAD_MIN_SILENCE_MS` |
 | `scripts/setup-pipeline.ps1` | PC 侧上传从只传 `smpc.py` 改成 `smpc.py` + `redecode.py`（静态改，沙箱跑不了 PowerShell） |
 | `SPEC.md` §4 阶段 0 | 补规则层文件名与 `--demo`、合块条件（照抄 `collect_chunks`）、复算失败也跳过且不让转写失败、替换**连起止时刻一起换**、报告字段写全、真跑过才标 `config` |
-| `tests/test_pc_redecode.py`（新，42 个用例） | 验收 1–10 逐条 + 合块（含恰好 30 s 的判界）+ smpc 接线（假 `faster_whisper` / 假 `pipe`） |
+| `tests/test_pc_redecode.py`（新，44 个用例） | 验收 1–10 逐条 + 合块（含恰好 30 s 的判界）+ smpc 接线（假 `faster_whisper` / 假 `pipe`）+ numpy 标量替身 |
 
 `pc/` 不在 `tests/conftest.py` 的 `sys.path` 里（那份只管 `scripts/`），测试文件自己加。
 
@@ -338,3 +338,34 @@ picked: 15 s × 24，10 s × 6，残留 × 3
 生成脚本 `mk_redecode.py` 的 `kept()` 原来是 `sum / max(1, len(o))`（原文 0 汉字 → 0.0），
 与 `pc/redecode.kept_ratio` 的 1.0 不同口径（第 2 节末尾那条）。改成同口径；重生成样例
 逐字节不变。
+
+### 6.4 真机整跑逮到的：numpy 标量进了报告，写正本时炸
+
+把 EP02 的音频复制成一次性的 `EP98`，用本分支的 `smpc.py` 在 PC 上从 `E:\asr\exp\pr81\`
+整跑一遍 `transcribe --ep EP98`（不部署到 `C:\asr`，不碰 vault）。第一遍与补解都跑完了
+（`redecode: chunks=449 segments=449`），**写盘那一行炸了**：
+
+```
+File "smpc.py", line 422, in cmd_transcribe
+    dest.write_text(json.dumps(doc, ensure_ascii=False, indent=1), encoding="utf-8")
+TypeError: Object of type bool is not JSON serializable
+when serializing dict item 'residual' / list item 0 / dict item 'blocks' / dict item 'redecode'
+```
+
+原因：faster-whisper 的词时刻是 numpy 标量；`gap_s` 拿它们算空洞，`max` / `sum` 一路
+吐 numpy float，`gap >= 5` 吐 numpy bool，`is_suspect` 把它原样当 `residual` 记进报告。
+numpy 的 float64 是 Python float 的子类所以 json 认，numpy 的 bool **不是** Python bool
+所以 json 不认——而这一炸发生在 `redecode_pass` 的兜底 `except` 之外、写正本的那一刻：
+**几分钟（长集是几小时）GPU 白跑，一个字都没落盘**。正是第 1 节自审最怕的那种失败，
+兜住了异常却没兜住报告里的类型。
+
+沙箱逮不到：镜像没有 numpy，假 `pipe` 给的是 Python float。修法两层：
+
+- 规则层的量收成内建类型：`speech_s` / `gap_s` 返回 `float`，`is_suspect` 返回 `bool`
+  （用例 `test_the_report_is_json_serialisable_when_word_times_are_numpy_scalars`，
+  用两个替身仿 numpy 那两条性质，未修版在 `json.dumps` 上复现同一个 `TypeError`）；
+- `redecode_pass` 的 try 里多一句 `json.dumps([segs, words, rep])`：段、词、报告都要进
+  正本，序列化不了就在补解这一步按失败处理（跳过、报原因、正本照写），不拖到写盘
+  （用例 `test_smpc_drops_what_it_cannot_serialise_instead_of_crashing_at_write_time`）。
+
+修完再整跑一遍 EP98 的结果见 6.5。

@@ -72,7 +72,7 @@ def n_han(text):
 
 def speech_s(chunk):
     """块的语音秒数（VAD 区间之和，不含区间之间的静音）。"""
-    return sum(e - s for s, e in chunk["speech"])
+    return float(sum(e - s for s, e in chunk["speech"]))
 
 
 def _speech_between(speech, lo, hi):
@@ -84,6 +84,10 @@ def gap_s(chunk, words):
 
     块首到第一个词、最后一个词到块尾也算——被吞掉半个块正是这两种形态。
     一个词都没有时，整块语音就是一个空洞。
+
+    收成内建 float：真机上词的时刻是 numpy 标量（faster-whisper 的 Word），numpy 的
+    算术和比较会一路吐 numpy 类型，numpy 的 bool 不是 Python bool，报告一进 json 就炸——
+    而那一炸发生在写正本的时候。
     """
     pts = [chunk["start"]]
     for w in words:
@@ -93,7 +97,7 @@ def gap_s(chunk, words):
     best = 0.0
     for lo, hi in zip(pts[0::2], pts[1::2]):
         best = max(best, _speech_between(chunk["speech"], lo, hi))
-    return best
+    return float(best)
 
 
 def rep4(text):
@@ -123,7 +127,8 @@ def is_suspect(chunk, text, words):
     sp = speech_s(chunk)
     if sp < MIN_SPEECH_S:
         return False
-    return n_han(text) / sp < MIN_DENSITY or gap_s(chunk, words) >= MAX_GAP_S
+    # bool()：这个值直接进报告的 residual，见 gap_s 的说明
+    return bool(n_han(text) / sp < MIN_DENSITY or gap_s(chunk, words) >= MAX_GAP_S)
 
 
 def acceptable(old, new):
