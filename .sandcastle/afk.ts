@@ -393,8 +393,10 @@ function halfDoneIssues(): Set<number> {
 // docs/agents/issue-tracker.md 的 frontier query:开放的 ready-for-agent、
 // 无 assignee、无未关闭的 blocker(GitHub 原生 issue dependencies)。
 //
-// 排序:**半成品优先**,同类内再取最小号。否则一旦有票在半路被打断(额度耗尽、
-// 崩溃、被打回返工),循环每次都会去挑更小号的新票,攒下一堆开了头没做完的分支。
+// 排序:**半成品优先**,其次带 `priority:high` 标签的票,同类内再取最小号。半成品
+// 优先是因为一旦有票在半路被打断(额度耗尽、崩溃、被打回返工),循环每次都会去挑
+// 更小号的新票,攒下一堆开了头没做完的分支。`priority:high` 由人打,用来让后开的急
+// 票插到队前(否则新票号大,永远排在最后)。
 //
 // `skip` 是循环模式的必要保险:这一轮已经处理过的票不能再取。失败、REJECTED
 // 都会撤掉 assignee 把票放回 frontier,而半成品优先又会把它顶到队首——不排除
@@ -408,6 +410,8 @@ function pickIssue(explicit?: number, skip: Set<number> = new Set()): IssueRef |
     gh("api", `repos/${REPO}/issues?labels=ready-for-agent&state=open&per_page=100`),
   );
   const halfDone = halfDoneIssues();
+  const urgent = (i: any) =>
+    (i.labels ?? []).some((l: any) => (typeof l === "string" ? l : l?.name) === "priority:high") ? 0 : 1;
   const frontier = items
     .filter(
       (i) =>
@@ -419,7 +423,10 @@ function pickIssue(explicit?: number, skip: Set<number> = new Set()): IssueRef |
     .sort((a, b) => {
       const ha = halfDone.has(a.number) ? 0 : 1;
       const hb = halfDone.has(b.number) ? 0 : 1;
-      return ha !== hb ? ha - hb : a.number - b.number;
+      if (ha !== hb) return ha - hb;
+      const ua = urgent(a);
+      const ub = urgent(b);
+      return ua !== ub ? ua - ub : a.number - b.number;
     });
   if (frontier.length === 0) return undefined;
   return { number: frontier[0].number, title: frontier[0].title };

@@ -15,6 +15,12 @@ Five canonical labels for routing work:
 - Assign exactly one of the five labels per issue
 - Move between labels as status changes (e.g., `needs-info` → `ready-for-agent` once clarified)
 
+## Priority (orthogonal to the five)
+
+| Label | Meaning | When to apply |
+|-------|---------|---------------|
+| `priority:high` | Jump the AFK queue | Only a human applies it. The AFK frontier picks half-finished issues first, then `priority:high`, then the lowest issue number (`.sandcastle/afk.ts` `pickIssue`). Without it a newly filed urgent ticket always sorts last. Remove it once the issue is done or no longer urgent. |
+
 ## Examples
 
 - **`needs-triage`** → "关注列表自动扫新投稿入队" (new, scope unclear)

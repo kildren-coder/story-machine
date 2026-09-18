@@ -15,8 +15,8 @@ agent-alert 的 `.sandcastle/` 同源（编排器、额度门槛、续跑机制�
 `.sandcastle/afk.ts` 编排，每次消化一个 issue：
 
 1. **取号**：frontier query——开放的 `ready-for-agent`、无 assignee、无未关闭
-   blocker（GitHub 原生 dependencies）；**半成品优先**，同类内取最小号；或命令行
-   指定。
+   blocker（GitHub 原生 dependencies）；**半成品优先**，其次带 `priority:high`
+   标签的票（人打，让后开的急票插队），同类内取最小号；或命令行指定。
 2. **判模式**：看分支状态决定这一轮是全新实现还是续跑（见「续跑」）。
 3. **认领**：`--add-assignee @me`。
 4. **实现**：沙箱内 Claude Code 在分支 `agent/issue-<n>` 上实现，issue 正文 /
