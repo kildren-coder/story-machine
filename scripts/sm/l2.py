@@ -46,13 +46,63 @@ PAD_S = 120              # 切片前后各带 2 分钟，只供理解（§5.2）
 PARA_HEAD_RE = re.compile(r"^\[\d{1,2}:[0-5]\d:[0-5]\d\]")
 TAG_RE = re.compile(r"<[^<>]*>")
 OK_TAGS = ("<who>", "</who>", "<hedge>", "</hedge>")
+TARGET_RATIO = 0.2       # 整理稿正文字数 ÷ 逐字稿字数，SPEC §1.3 的主口径
+HANZI_RE = re.compile(r"[一-鿿]")
+
+
+# ---------------------------------------------------------------- 字数预算
+
+def hanzi(s) -> int:
+    """汉字数。拉丁词、数字、标点、空白一个都不计（SPEC §1.3）。
+
+    分子（整理稿正文）和分母（逐字稿）用同一把尺，比值才跟 0.2 可比；中英混排里
+    「DSA 这个组织」按 4 个字算，换成按字符数量就随讲什么话题上下漂。
+    """
+    return len(HANZI_RE.findall(str(s or "")))
+
+
+def body_chars(lines: list[dict]) -> int:
+    """这些行的**正文**汉字数。传的是行表，不是渲染好的文本。
+
+    `format_lines` 印出来的 `35 [00:19:00] 阿桥: 正文` 里，行号、`[HH:MM:SS]`、
+    说话人前缀都是代码加的脚手架，数进去就虚高（说话人名是汉字，正文一多它还越
+    积越多）。这里直接数它印在冒号后面的那一截——行表自己的 `text`，跟
+    `format_lines` 同一个字段，不另写一套解析。
+    """
+    return sum(hanzi(ln.get("text")) for ln in lines)
+
+
+def paras_chars(topics) -> int:
+    """这些话题所有 `paras` 的汉字数——整理稿正文的字数就是这个。
+
+    段首的 `[HH:MM:SS]` 与 `<who>` `<hedge>` 两对标记全是 ASCII，汉字这把尺本身
+    就数不着它们；标记**包着**的名字和限定词是正文，照数。
+    """
+    return sum(hanzi(p) for t in topics
+               for p in (t.get("paras") if isinstance(t.get("paras"), list) else []))
+
+
+def budget(body: list[dict]) -> tuple[int, int]:
+    """(本章逐字稿汉字数, 整理稿目标字数)。目标随输入算，不写死（SPEC §1.3）。"""
+    src = body_chars(body)
+    return src, round(src * TARGET_RATIO)
+
+
+def ratio_of(paras: int, src: int) -> str:
+    """实际压缩比，报日志用。逐字稿一个汉字都没有时不报数（除零）。"""
+    return f"{paras / src:.2f}" if src else "—"
 
 
 # ---------------------------------------------------------------- 输入
 
 def head_block(ep: str, chapter: dict, first_line: int, last_line: int,
-               names: list[str]) -> str:
-    """头，一行一个键。挤成一行会让「照抄 episode」有歧义（L1 上的教训）。"""
+               names: list[str], body: list[dict]) -> str:
+    """头，一行一个键。挤成一行会让「照抄 episode」有歧义（L1 上的教训）。
+
+    末两行是字数预算：本章逐字稿有多少字、整理稿正文该写多少字。prompt 里一个
+    绝对字数都不写——输入多长每章都不一样，写死下一集就错（SPEC §1.3）。
+    """
+    src, target = budget(body)
     return "\n".join([
         f"episode: {ep}",
         f"章节: {chapter.get('id', '')}",
@@ -60,6 +110,8 @@ def head_block(ep: str, chapter: dict, first_line: int, last_line: int,
         f"范围: {chapter.get('start', '')}–{chapter.get('end', '')}",
         f"行号: {first_line}–{last_line}",
         f"说话人: {'、'.join(names) if names else '未点名'}",
+        f"本章逐字稿: {src} 字",
+        f"整理稿目标: 约 {target} 字",
     ])
 
 
@@ -83,7 +135,7 @@ def build_input(ep: str, chapter: dict, chapters: list[dict], lines: list[dict],
     before, body, after = _slice(chapter, lines)
     first = body[0]["n"] if body else 0
     last = body[-1]["n"] if body else 0
-    out = [head_block(ep, chapter, first, last, _names(body, speakers)),
+    out = [head_block(ep, chapter, first, last, _names(body, speakers), body),
            "---",
            chapter_map(chapters, chapter.get("id")),
            "---"]
@@ -447,6 +499,20 @@ def read_done(paths, ep: str, chapters: list[dict], log=print) -> tuple[dict, li
     return done, orphans
 
 
+def _warn_stale_prompt(done: dict, version: str, log) -> None:
+    """跳过的章里，哪些是旧 prompt 出的。
+
+    **不自动重跑**——每改一次 prompt 就把整集重烧一遍太贵。但不报的话，人手里这份
+    整理稿是哪一版 prompt 写的，除了逐个翻 `provenance` 没有别的办法看出来。
+    """
+    stale = {c: (fs[0].get("provenance") or {}).get("prompt_version") or "未记"
+             for c, fs in done.items() if fs}
+    stale = {c: v for c, v in stale.items() if v != version}
+    if stale:
+        log(f"    L2：{len(stale)} 章的 prompt_version 落后于当前 prompt"
+            f"（{'、'.join(sorted(set(stale.values())))} → {version}），要重跑加 --force")
+
+
 def drop_chapter_frags(digest_dir: Path, chapter_id: str) -> int:
     """删掉 `chapter` 等于它的片段。**按片段里的 `chapter` 键认，不按文件名猜**
     ——`frag-market-*.json` 会误伤 `market-2` 章的片段。"""
@@ -521,6 +587,7 @@ def run_l2(paths, runner, ep: str, chapters: list[dict], segments: list[dict],
         done.pop(c["id"], None)
     if len(todo) < len(chs):
         log(f"    L2：{len(chs) - len(todo)} 章已完成，跳过不调用——要重跑加 --force")
+    _warn_stale_prompt(done, prompt["version"], log)
 
     failed: list[str] = []
     if todo:
@@ -561,8 +628,14 @@ def run_l2(paths, runner, ep: str, chapters: list[dict], segments: list[dict],
                 _write_json(digest_dir / "topics.json", doc)
                 kinds = "、".join(f"{k} {sum(1 for f in frags if f['kind'] == k)}"
                                  for k in KINDS)
+                # 实际正文对目标：报出来人才知道这一趟压到了多少（红线 6：只报数，
+                # 不打印产物内容）。判不了「短是因为写法好还是因为把事删了」，所以
+                # 这里只报，不设闸门——那归 #57 拿真实样例对基线判
+                src, target = budget(_slice(c, lines)[1])
+                wrote = paras_chars(frags)
                 log(f"    L2 {c['id']}：{len(frags)} 个话题（{kinds}）"
-                    f"{f'，清掉旧片段 {dropped} 份' if dropped else ''}")
+                    f"{f'，清掉旧片段 {dropped} 份' if dropped else ''}"
+                    f"，正文 {wrote} 字 / 目标 {target} 字（比 {ratio_of(wrote, src)}）")
 
     if dirty and doc is None:                         # 只清了孤儿、没有章跑过
         doc = topics_doc(ep, chs, done, model=model, effort=effort,

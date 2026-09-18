@@ -569,6 +569,17 @@ L2_MODEL = {
     "EP92": {"followup": [FRAG_OPENING92, FRAG_FOLLOWUP, FRAG_OUTRO92]},
 }
 
+# 字数预算远远不达标的一章：话题、kind、锚点都照旧，只把 paras 砍到目标的十分之一。
+# L2 **不为字数设闸门**——为了短而删内容比超预算糟得多，而代码判不了「短是因为写法
+# 好还是因为把事删了」，所以这份响应必须照常通过、照常写出片段（长短归 #57 拿真实
+# 样例对基线判）。段首那个时间戳照旧，不然会被「每段以 [HH:MM:SS] 开头」拦下
+L2_MARKET_SHORT = []
+for _t, _short in zip(L2_MODEL["EP91"]["market"],
+                      ("夜市要搬。", "货车费率有争议。", "回了弹幕。")):
+    _t = copy.deepcopy(_t)
+    _t["paras"] = [_t["paras"][0].split("] ", 1)[0] + "] " + _short]
+    L2_MARKET_SHORT.append(_t)
+
 
 # 断言：claims / channels 的 quote 也必须逐字来自某一段（同一话题范围内）
 def assert_verbatim(frag, segs):
@@ -734,6 +745,8 @@ wjson(ROOT / "raw-bad/EP91/L1-all.raw.json",
       envelope(EP91_CHAPTERS_BAD, in_tok=6000, out_tok=600, structured=False))
 wjson(ROOT / "raw-bad/EP91/L2-market.raw.json", envelope({"topics": [FRAG_MARKET_BAD]}, structured=False))
 wjson(ROOT / "raw-bad/EP91/L2-bridge.raw.json", envelope(None, bad_text="这一章开头全是寒暄，我没法按要求整理，建议合并到后一章。"))
+# 这一份 schema 合法、结构也合法，坏的只是字数——所以带 structured_output，跟好响应一样
+wjson(ROOT / "raw-bad/EP91/L2-market-short.raw.json", envelope({"topics": L2_MARKET_SHORT}, out_tok=300))
 wjson(ROOT / "raw-bad/2026-03-12/L4-all.raw.json", envelope(EVENTS_BAD, in_tok=4000, out_tok=500, structured=False))
 
 # ------------------------------------------------------------------ README
@@ -757,7 +770,7 @@ README = f"""# tests/fixtures — 合成样例
 | `digest/2026-03-12/events.json` | L4 事件清单：跨 EP 合并、同一 EP 内被打断的同一事件合并、沿用已有事件 id | §5.5 |
 | `l3/frag-market-01.bad.json` | 故意违规的片段：闸门 1（引文改写）、2（时间戳越界）、3（丢 hedge）、5（asr.heard 不存在） | §4 L3 |
 | `raw/<EP 或日期>/<层>-<单元>.raw.json` | 假 `claude -p --output-format json` 信封；L1 / L2 带 `structured_output`（`--json-schema` 的形状），L4 的 `result` 是围栏 JSON | §4.1 |
-| `raw-bad/…` | 坏响应（只有 `result`）：L1 行号不在这一集里 + 缺 title；L2 闸门违规；L2 纯散文无 JSON；L4 引用不存在话题 + aside 成事件 | §4.1 |
+| `raw-bad/…` | 坏响应（多数只有 `result`）：L1 行号不在这一集里 + 缺 title；L2 闸门违规；L2 纯散文无 JSON；L2 正文只有字数预算的十分之一（`L2-market-short`，schema 合法故带 `structured_output`，L2 不为字数设闸门）；L4 引用不存在话题 + aside 成事件 | §4.1 |
 
 `raw/` 的键与 `_pairs/` 的文件名一致：`_pairs/EP91/L2-bridge.in.md` ↔ `raw/EP91/L2-bridge.raw.json`。
 L2 的单元是**章节**：一章一次调用，响应里是这一章的全部话题。假 runner 按这个键取响应，缺键即报错（不是静默跳过）。
