@@ -16,7 +16,7 @@ Five canonical labels (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-f
 
 `ready-for-agent` issues are consumed by sandboxed AFK agents via sandcastle (`.sandcastle/`); the AFK boundary is a green PR — merge, and running the real EP02 sample against the merged layer, are separate human-driven steps. See `docs/agents/afk-sandcastle.md`.
 
-When drafting tickets, apply that doc's admission criteria per ticket — especially the fixture check (fixtures must be **synthetic**, never real transcript excerpts — red line 10), the four questions (失败语义 / 资源边界 / 生命周期边缘 / 集成契约), and the rule that prompt-quality work is not an AFK ticket.
+When drafting tickets, apply that doc's admission criteria per ticket — especially the fixture check (fixtures must be **synthetic**, never real transcript excerpts — red line 10), the admission questions (失败语义 / 资源边界 / 生命周期边缘 / 集成契约 / 闸门宽容度 / 量化预算 — the ticket section is still called 「## 四问」), and the rule that prompt-quality work is not an AFK ticket.
 
 **Tickets are vertical slices (tracer bullets), never one-module-per-ticket.** Every ticket must produce a change a person can open and see, stated in a 「可见变化」 section (a demo command on a fixture copy + the post-merge command on the real vault); the first ticket of a milestone is the walking skeleton that runs the thinnest path through every layer, and later tickets thicken it. This applies to all future development plans.
 
