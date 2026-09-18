@@ -681,9 +681,21 @@ def test_the_report_is_json_serialisable_when_word_times_are_numpy_scalars():
     numpy bool → 写正本时 `TypeError: Object of type bool is not JSON serializable`，
     几分钟 GPU 白跑、一个字都没落盘。规则层的量一律收成内建类型。"""
     doc = load()
-    words = [[[NpFloat(w[0]), NpFloat(w[1]), w[2]] for w in ws] for ws in doc["words"]["segments"]]
+
+    def np_words(ws):
+        return [[NpFloat(w[0]), NpFloat(w[1]), w[2]] for w in ws]
+
+    # 第一遍的词和重解出来的词都是 numpy 标量——真机上炸的是替换块的 residual：
+    # 密度够了、由空洞（numpy float）决定，`or` 把 numpy bool 原样交出来
+    words = [np_words(ws) for ws in doc["words"]["segments"]]
+    decode0, _ = redecode.demo_decoder(doc)
+
+    def decode(k, start, end, length):
+        segs, ws = decode0(k, start, end, length)
+        return ([dict(s, start=NpFloat(s["start"]), end=NpFloat(s["end"])) for s in segs],
+                [np_words(sw) for sw in ws])
+
     assert not isinstance(NpFloat(1.0) >= 0.5, bool)           # 替身确实仿到了那条性质
-    decode, _ = redecode.demo_decoder(doc)
     _, _, rep = redecode.run(doc["chunks"], doc["transcript"]["segments"], words, decode)
     json.dumps(rep)
     for b in rep["blocks"]:
