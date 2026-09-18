@@ -24,6 +24,8 @@ from sm.prov import read_prompt                                    # noqa: E402
 
 # 打磨期 prompt 版本一天能升几次（#57），钉死在这里只会逼人跟着改测试
 VERSION = read_prompt(REPO / "prompts" / "L1-skeleton.md")["version"]
+# 笔记的 `整理版本:` 取渲染所依据那一层的版本——整理稿是 L2 的产物（§5.7）
+L2_VERSION = read_prompt(REPO / "prompts" / "L2-topic.md")["version"]
 
 
 @pytest.fixture

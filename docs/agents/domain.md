@@ -46,14 +46,15 @@
 │   └── qa/                             ← Per-issue QA docs written by AFK agents (issue-<n>.md, -brief.md)
 ├── .sandcastle/                        ← AFK orchestrator, prompts, Dockerfile (not project code)
 ├── prompts/
-│   └── L1-skeleton.md                  ← L1 骨架：整集 → 章节表（首行 version:）
+│   ├── L1-skeleton.md                  ← L1 骨架：整集 → 章节表（首行 version:）
+│   └── L2-topic.md                     ← L2 逐章节整理：章节切片 → 话题与五类内容
 ├── scripts/
 │   ├── digest.py                       ← 单集入口：`ep EP{n} --vault <dir>`（worker -Extract 转交它）
 │   ├── sm/                             ← 各层共用的机械件（SPEC §4.1）
 │   │   ├── text.py / note.py / paths.py        时间戳归一 / EP 笔记读写 / vault 路径
 │   │   ├── transcript.py                       §5.1 正本 → §5.2 喂模型的文本
 │   │   ├── runner.py / pairs.py / prov.py      无头调用三形态 / 三份留档与 _failed/ / provenance
-│   │   ├── l1.py                               L1 调用、章节表检查与归一
+│   │   ├── l1.py / l2.py                       L1 章节表 / L2 逐章节整理（检查、归一、并发）
 │   │   └── render_ep.py                        整理稿标记块渲染与写回（§5.7）
 │   ├── worker.ps1                      ← 阶段 0 执行器 + -Extract / -Name 等人触发入口
 │   └── test.sh                         ← Offline test entry used by AFK and humans

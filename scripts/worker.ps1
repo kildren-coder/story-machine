@@ -922,7 +922,7 @@ function Invoke-Extract {
 
     $argv = @($DigestScript, 'ep', $Ep, '--vault', $Vault)
     if ($Again) { $argv += '--force' }
-    Write-Log "$Ep 整理：无头 Claude Code，整集一次调用要跑几分钟，别关窗口" Cyan
+    Write-Log "$Ep 整理：无头 Claude Code，整集一次 + 每章一次，要跑十几分钟，别关窗口" Cyan
     $prevEap = $ErrorActionPreference
     $ErrorActionPreference = 'Continue'
     try {
@@ -932,7 +932,7 @@ function Invoke-Extract {
     finally { $ErrorActionPreference = $prevEap }
     # 退出码：1 = 某层不过，已落 _failed/ 且笔记打了 整理: failed；2 = 输入缺失
     if ($rc -ne 0) { throw "$Ep 整理失败（退出码 $rc），详情看上面的日志" }
-    Write-Log "$Ep 整理完成——话题大纲已写进 EP 笔记，点时间戳可跳播" Green
+    Write-Log "$Ep 整理完成——整理稿已写进 EP 笔记，点时间戳可跳播" Green
 }
 
 $script:NamedAt = @{}
