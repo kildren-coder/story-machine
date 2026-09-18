@@ -64,12 +64,17 @@ def errs(obj, first: int = 1, last: int = 40) -> str:
 # ---------------------------------------------------------------- 输入
 
 def test_head_is_one_key_per_line_and_the_map_marks_this_chapter():
-    """头一行一个键；章节地图一章一行，本章那一行行首标 `→`（验收 3）。"""
+    """头一行一个键；章节地图一章一行，本章那一行行首标 `→`（验收 3）。
+
+    末两行是字数预算（第二轮验收 3）：`第41行`…`第120行` 共 80 行、每行 4 个汉字
+    （`第`、`行` 加一到两位数字里没有汉字）→ 160 字，目标 160 × 0.2 = 32 字。
+    """
     text = build_input("EP02", CHAPTERS[1], CHAPTERS, LINES, NAMES)
     head, rest = text.split("\n---\n", 1)
     assert head.splitlines() == ["episode: EP02", "章节: two", "标题: 第二章",
                                  "范围: 00:20:00–01:00:00", "行号: 41–120",
-                                 "说话人: 阿桥（主播）、老周（嘉宾）"]
+                                 "说话人: 阿桥（主播）、老周（嘉宾）",
+                                 "本章逐字稿: 160 字", "整理稿目标: 约 32 字"]
     chart, body = rest.split("\n---\n", 1)
     rows = chart.splitlines()
     assert len(rows) == 2 and rows[0].startswith("  1. 00:00:00–00:20:00 第一章 —— ")

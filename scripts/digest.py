@@ -30,14 +30,14 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from sm.l1 import run_l1                                          # noqa: E402
-from sm.l2 import run_l2                                          # noqa: E402
+from sm.l2 import body_chars, paras_chars, ratio_of, run_l2       # noqa: E402
 from sm.note import read_frontmatter, read_note, read_speakers    # noqa: E402
 from sm.paths import VaultPaths                                   # noqa: E402
 from sm.prov import now_iso, read_prompt                          # noqa: E402
 from sm.render_ep import render_digest, write_into_note           # noqa: E402
 from sm.runner import ClaudeRunner, FakeRunner                    # noqa: E402
 from sm.text import hms                                           # noqa: E402
-from sm.transcript import duration_s, read_transcript             # noqa: E402
+from sm.transcript import build_lines, duration_s, read_transcript  # noqa: E402
 
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -162,8 +162,13 @@ def cmd_ep(args) -> int:
     version = prov.get("prompt_version") or l2_prompt["version"]
     kinds = {k: sum(1 for t in topics["topics"] if t.get("kind") == k)
              for k in ("talk", "aside", "filler")}
+    # 压缩比是阅读预算的主口径（SPEC §1.3，约 0.2）：整集跑完报一次，人不用自己去
+    # 数字数就知道这一趟的整理稿有多长。只报数，不打印内容（红线 6）
+    wrote = paras_chars(frags.values())
+    src = body_chars(build_lines(segments))
     log(f"L2 通过：{len(topics['topics'])} 个话题（talk {kinds['talk']}、"
-        f"aside {kinds['aside']}、filler {kinds['filler']}）→ "
+        f"aside {kinds['aside']}、filler {kinds['filler']}）；正文合计 {wrote} 字 / "
+        f"逐字稿 {src} 字，压缩比 {ratio_of(wrote, src)} → "
         f"{paths.rel(paths.digest(ep) / 'topics.json')}")
     # 块首行那个时间说的是「这份整理稿什么时候生成的」，取产物自己记的那个：跳过
     # L2 重渲染时用当下，笔记每跑一次就变一次（Obsidian 记一条新版本、同步重传）
