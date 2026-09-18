@@ -35,17 +35,25 @@ def render_para(text: str) -> str:
                         WHO_RE.sub(lambda m: f"**{m.group(1)}**", str(text or "")))
 
 
-def render_digest(topics: list[dict], frags: dict, version: str, now: str) -> str:
+def render_digest(topics: list[dict], frags: dict, version: str, now: str,
+                  gates: dict) -> str:
     """`## 整理稿` 那一块的正文（不含标记行，标记由 write_into_note 加）。
 
     **按话题出节**，不按章：章只是 L2 的调用单位，人读的是话题。`talk` 出五类
     内容，`aside` 只出 `paras`（多写的锚点留在片段里，不渲染），`filler` 整个
     不渲染——但**段数与合计时长报在块首行**：不报的话，模型把正题误判成 `filler`
     时人在笔记上再也看不见它（红线 9 的阅读面形态）。
+
+    `gates` 是这一趟闸门的合计（`GateReport.totals`），**全 0 也照写在块首行**：
+    闸门删掉的引文在笔记上是看不见的，不报数的话人根本不知道这一集删过东西
+    （同上，红线 9 的阅读面形态）。每话题的明细在 `_digest/EP{n}/gates.json`。
     """
     shown = [t for t in topics if t.get("kind") != "filler"]
     hidden = [t for t in topics if t.get("kind") == "filler"]
     head = (f"> [!info] 本块由 L3 渲染（整理版本 {version}，生成于 {now}）；"
+            f"闸门：删引文 {gates.get('quotes_dropped', 0)} 条、"
+            f"越界 {gates.get('quotes_out_of_range', 0)} 条、"
+            f"删 ASR 条目 {gates.get('asr_dropped', 0)} 条；"
             f"重跑会覆盖，批注请写在块外。")
     if hidden:
         total = sum(max(0, (parse_hms(t.get("end")) or 0) - (parse_hms(t.get("start")) or 0))

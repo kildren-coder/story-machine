@@ -13,6 +13,7 @@ from sm.render_ep import render_digest, render_para
 
 VER = "L2-topic@9.9"
 NOW = "2026-03-12T23:10:00+08:00"
+ZERO = {"quotes_dropped": 0, "quotes_out_of_range": 0, "asr_dropped": 0}
 
 
 def topic(tid, kind, a, b, title=None) -> dict:
@@ -30,13 +31,14 @@ def frag(tid, **over) -> dict:
 def test_every_topic_gets_a_seekable_heading_and_its_paragraphs():
     topics = [topic("t1", "talk", "00:03:30", "00:19:00", "北港大桥收费方案"),
               topic("t2", "talk", "00:19:00", "00:36:00", "河口夜市搬迁")]
-    out = render_digest(topics, {"t1": frag("t1"), "t2": frag("t2")}, VER, NOW)
+    out = render_digest(topics, {"t1": frag("t1"), "t2": frag("t2")}, VER, NOW, ZERO)
 
     # 时间戳写成裸 [HH:MM:SS]，跳播插件才认（ADR 0001）
     assert "### [00:03:30] 北港大桥收费方案\n\n[00:00:00] **阿桥**讲了 t1\n" in out
     assert out.count("### ") == 2
     assert out.startswith("## 整理稿\n\n> [!info] 本块由 L3 渲染（整理版本 L2-topic@9.9，"
-                          f"生成于 {NOW}）；重跑会覆盖，批注请写在块外。\n")
+                          f"生成于 {NOW}）；闸门：删引文 0 条、越界 0 条、删 ASR 条目 0 条；"
+                          "重跑会覆盖，批注请写在块外。\n")
     assert "杂项未渲染" not in out and "旁白" not in out
 
 
@@ -48,7 +50,7 @@ def test_five_kinds_of_content_each_get_their_own_subsection():
              channels=[{"ts": "00:03:30", "who": "阿桥", "name": "市交通局通报",
                         "kind": "政府通报", "quote": "市交通局上周发了一个通报"}],
              asr=[{"heard": "北岗大桥", "means": "北港大桥"}])
-    out = render_digest([topic("t1", "talk", "00:03:30", "00:19:00")], {"t1": f}, VER, NOW)
+    out = render_digest([topic("t1", "talk", "00:03:30", "00:19:00")], {"t1": f}, VER, NOW, ZERO)
 
     assert "**原话锚点**\n\n- [00:04:36] 老周：「十五块是听证会的建议价」\n" in out
     assert "**可核查的说法**\n\n- [00:04:36] 老周：听证会建议价 15 元\n" in out
@@ -58,10 +60,19 @@ def test_five_kinds_of_content_each_get_their_own_subsection():
     assert "**疑似 ASR 生音**\n\n- 听成「北岗大桥」→ 应为「北港大桥」\n" in out
 
 
+def test_the_block_head_reports_what_the_gates_dropped():
+    """issue #53：闸门删掉的引文在笔记上是看不见的，块首行不报数人就不知道这一集
+    删过东西——全 0 也照写。"""
+    out = render_digest([topic("t1", "talk", "00:00:00", "00:10:00")], {"t1": frag("t1")},
+                        VER, NOW,
+                        {"quotes_dropped": 2, "quotes_out_of_range": 1, "asr_dropped": 3})
+    assert "闸门：删引文 2 条、越界 1 条、删 ASR 条目 3 条；" in out.splitlines()[2]
+
+
 def test_an_empty_subsection_keeps_quiet():
     """`talk` 话题里没有信源是常事，留个空标题只是噪音。"""
     out = render_digest([topic("t1", "talk", "00:00:00", "00:10:00")], {"t1": frag("t1")},
-                        VER, NOW)
+                        VER, NOW, ZERO)
     for title in ("原话锚点", "可核查的说法", "提到的信源", "疑似 ASR 生音"):
         assert title not in out
 
@@ -71,7 +82,7 @@ def test_an_aside_only_shows_its_paragraphs():
     f = frag("t2", quotes=[{"ts": "00:41:30", "who": "阿桥", "text": "多写的一条"}],
              claims=[{"ts": "00:41:30", "who": "阿桥", "claim": "多写的", "quote": "多写的一条"}])
     out = render_digest([topic("t2", "aside", "00:41:30", "00:42:40", "结尾弹幕")],
-                        {"t2": f}, VER, NOW)
+                        {"t2": f}, VER, NOW, ZERO)
     assert "### [00:41:30] 结尾弹幕 · 旁白" in out
     assert "原话锚点" not in out and "可核查的说法" not in out
     assert "多写的一条" not in out
@@ -84,7 +95,7 @@ def test_filler_is_not_rendered_but_its_minutes_are_reported():
     topics = [topic("t0", "filler", "00:00:00", "00:03:30", "开场与设备测试"),
               topic("t1", "talk", "00:03:30", "00:19:00", "北港大桥收费方案"),
               topic("t9", "filler", "00:19:00", "00:20:30", "念打赏名单")]
-    out = render_digest(topics, {"t1": frag("t1")}, VER, NOW)
+    out = render_digest(topics, {"t1": frag("t1")}, VER, NOW, ZERO)
     assert "另有 2 段杂项未渲染（合计 00:05:00）。" in out.splitlines()[2]
     assert "开场与设备测试" not in out and "念打赏名单" not in out
     assert out.count("### ") == 1
