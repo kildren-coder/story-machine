@@ -1,8 +1,18 @@
 # QA — issue #52 逐章节整理：L2 按章切片、章内切话题 → EP 笔记里出现整理稿
 
-分支 `agent/issue-52`。沙箱内 `bash scripts/test.sh` 全绿（108 个 pytest 用例，
-本票新增 43 个，含评审补的 1 个），没有调用过 `claude -p`，没有碰过 vault，所有
-用例跑在 `tests/fixtures/vault/` 的临时副本上。
+分支 `agent/issue-52`。沙箱内 `bash scripts/test.sh` 全绿（118 个 pytest 用例：
+第一轮 43 个 + 第二轮 10 个），没有调用过 `claude -p`，没有碰过 vault，所有用例
+跑在 `tests/fixtures/vault/` 的临时副本上。
+
+**这张票有两轮。** 第一轮（`L2-topic@0.1`）已由 PR #76 合并，下面第 1–5 节记的
+是它。第二轮（`L2-topic@0.2`）只补一件第一轮漏掉的事——**字数预算进输入**——
+不改层的形状，记在第 6 节，第 1–5 节里被它改掉的地方就地标了「第二轮」。
+
+第二轮的由来：2026-09-18 拿 EP02 真跑了一遍 `@0.1`，12 章 → 58 个话题，跑通、
+测试全绿、红线扫描干净，但**整理稿正文 39,535 汉字 / 逐字稿 54,007 汉字 = 压缩比
+0.73**，读完约 100 分钟——对着 191 分钟的音频几乎没省下时间。SPEC §1.3 写的是
+0.2，而 `prompts/L2-topic.md` 里一个字都没提长度；模型被告知「全长、按叙述顺序、
+不压成条目」，它老实照做了。
 
 ---
 
@@ -67,6 +77,10 @@
 ---
 
 ## 2. 「可见变化」演示（fixture 副本，合成内容）
+
+> 下面这段 stdout 是**第一轮**（`L2-topic@0.1`）跑出来的原样记录，照着跑现在会多
+> 出字数那几项、版本号也变成 `@0.2` —— 当前的输出见 §6.2。笔记那一块的形状两轮
+> 之间没有变化。
 
 ```
 $ rm -rf /tmp/demo && mkdir -p /tmp/demo && cp -r tests/fixtures/vault /tmp/demo/vault
@@ -247,17 +261,20 @@ python scripts\digest.py ep EP02 --vault "D:\obsidian-task\任务栏\story-machi
 2. **随便挑一章的 `_digest\EP02\frag-<章节>-0N.json`**（挑一个 15 分钟的章）
    - 这一章各话题的 `paras` 加起来，比着**本章逐字稿字数 × 0.2**（SPEC §1.3 的
      压缩比，主口径）。少一大截是在写摘要，多一大截是在誊逐字稿——两种都是
-     prompt 的问题（#52 后续把目标字数算进输入、#57 打磨），不是代码的问题。
-     *2026-09-18 EP02 实跑：正文 39,535 汉字 / 逐字稿 54,007 汉字 = 压缩比 0.73，
-     超预算 3.6 倍。这一条原先写的「1500–3000 字」是凭空定的绝对值，已作废。*
+     prompt 的问题（#57 打磨），不是代码的问题。
+     *2026-09-18 EP02 实跑 `@0.1`：正文 39,535 汉字 / 逐字稿 54,007 汉字 = 压缩比
+     0.73，超预算 3.6 倍。这一条原先写的「1500–3000 字」是凭空定的绝对值，已作
+     废。第二轮起这两个数**不用自己算**：日志每章直接报「正文 N 字 / 目标 M 字
+     （比 0.NN）」，末行报整集压缩比。*
    - 每个话题 `quotes` ≤ 6 条，`text` 里没有标点（真实逐字稿是无标点的 ASR 文本，
      加了标点说明模型在改字，L3 的闸门 1 会把它整条删掉）。
    - `talk` 话题的 `claims` 一般 5–15 条；`asr` 多半 0–2 条。
    - `paras` 里只有 `[HH:MM:SS]`、`<who>`、`<hedge>` 三种标记；**限定词该标的都标了**
      （挑一段他说「应该」「听说」的，看有没有 `<hedge>`）。
 3. **`_pairs\EP02\L2-<章节>.in.md`**（喂进去的原样输入，随便挑一章）
-   - 头六行：`episode:` / `章节:` / `标题:` / `范围:` / `行号:` / `说话人:`；
-     `行号:` 的两个数就是「本章」那一段第一行和最后一行行首的整数。
+   - 头八行（第二轮从六行变八行）：`episode:` / `章节:` / `标题:` / `范围:` /
+     `行号:` / `说话人:` / `本章逐字稿:` / `整理稿目标:`；`行号:` 的两个数就是
+     「本章」那一段第一行和最后一行行首的整数。
    - 章节地图一章一行、本章那一行行首是 `→`。
    - 三段分隔行 `=== 上文（只供理解，不写） ===` / `=== 本章 ===` /
      `=== 下文（只供理解，不写） ===`；第一章没有「上文」，最后一章没有「下文」。
@@ -272,8 +289,8 @@ python scripts\digest.py ep EP02 --vault "D:\obsidian-task\任务栏\story-machi
      （3 小时的集里合计超过 15 分钟就去翻那几个 `filler` 片段，多半误判了）。
    - **计时读一遍**（#50 的判据是 30 分钟内读完）。读的时候留意：有没有一段读着
      像摘要、有没有一件事只讲了一半（章界接缝，见下）。
-   - frontmatter：`整理: done`、`整理版本: L2-topic@0.1`；块外人写的东西一个字节
-     没动。
+   - frontmatter：`整理: done`、`整理版本: L2-topic@0.2`（第二轮升的版）；块外人
+     写的东西一个字节没动。
 6. **章界上的接缝**
    - 在 `topics.json` 里数一数 `start` 落在某一章 `start` 后 1 分钟内的话题、以及
      `gist` 里写了「接上一章」「下一章继续」的话题；挑两个在笔记里读一遍，看
@@ -286,7 +303,7 @@ python scripts\digest.py ep EP02 --vault "D:\obsidian-task\任务栏\story-machi
 | 退出码 1、`整理: failed`、`_failed\EP02\L2-<章节>.failed.json` 出现 | 那一章两次都没过代码检查（`errors` 里带着位置：第几个话题、行号多少）。其他章的片段已经写好了，`topics.json` 里也有，只是整集不渲染 | 直接再跑一次 `-Extract EP02`：完成的章会跳过，只补这一章。反复挂在同一类错（段没有时间戳、多余标记）→ 改 `prompts\L2-topic.md` 升 `version:` 重跑 |
 | 日志里某章「重试 1 次仍不过」，错误是「响应不是合法 JSON」 | 模型没按 schema 交货（`--json-schema` 会在会话里先自己重来 5 次），或者信封是 `error_max_structured_output_retries` | 看 `_pairs\EP02\L2-<章节>.raw.json` 里模型到底回了什么；单章现象就重跑，每章都这样就是 prompt 或 schema 的问题 |
 | 某章调用超过 1800 秒被杀 | 章太长（L1 偶尔切出 30 分钟以上的章）或 CLI 卡住 | `--timeout 3600` 重跑那一集；连着出现就去看 L1 把章切多长了 |
-| 整理稿读着像摘要、3 小时一集只有五六千字 | prompt 的问题，不是代码的问题 | 改 `prompts\L2-topic.md`（「全长、按叙述顺序、不压成条目」那几条），升 `version:`，`-Extract EP02 -Redo`。**不要**去代码里加字数检查 |
+| 整理稿读着像摘要（日志里某章的比值远低于 0.2，或整集压缩比只有 0.05 上下） | prompt 的问题，不是代码的问题 | 改 `prompts\L2-topic.md`（「全长、按叙述顺序、不压成条目」与「字数预算」那几条），升 `version:`，`-Extract EP02 -Redo`。**不要**去代码里加字数闸门——代码判不了「短是因为写法好还是因为把事删了」，而为了短删内容比超预算糟得多（红线 2） |
 | 笔记里少了一整段你记得他讲过的内容，块首行的「杂项未渲染」时长很大 | 模型把正题判成了 `filler` | 去 `_digest\EP02\` 里找那个 `kind: filler` 的片段确认，然后改 prompt 的 `kind` 判据（「整段删掉会不会丢东西」）升版本重跑 |
 | 笔记里出现 `<who>` / `<hedge>` 字样，或表格散掉 | 渲染没把标记换掉（不可能，有用例）；表格散掉多半是 `name` / `quote` 里有 `\|` 或换行 | 前者报 bug；后者见第 4 节最后一段 |
 | 某章反复挂在「里有 HTML 注释，渲染进笔记会撑破标记块」 | 模型在 `title` / `gist` / 锚点 / 说法 / 信源里写了 `<!-- … -->`（逐字稿里几乎不可能有，多半是它自己加的排版） | 重跑一次；反复出现就在 prompt 里补一句「不要写 HTML 注释」并升 `version:`。**不要**改成渲染时删注释——那是替模型改字 |
@@ -304,3 +321,167 @@ python scripts\digest.py ep EP02 --vault "D:\obsidian-task\任务栏\story-machi
 - vault 里彻底清干净：删 `_digest\EP02\`、手删 EP02 笔记里
   `<!-- digest:auto -->` … `<!-- /digest -->` 整块、把 `整理: done` 改回 `pending`。
   `_pairs\EP02\` 建议留着（永久正本，§9；#55 的 `--replay` 要用它免额度重渲染）。
+
+---
+
+## 6. 第二轮：字数预算进输入（`L2-topic@0.2`）
+
+### 6.1 改动摘要
+
+| 文件 | 做了什么 |
+|---|---|
+| `scripts/sm/l2.py` | 新增 `hanzi`（只数 `[一-鿿]`）、`body_chars`（一组行的正文汉字数）、`paras_chars`（一组话题的 `paras` 汉字数）、`budget`（→ 本章字数与目标字数）、`ratio_of`；`head_block` 多两行、多收一个 `body` 参数；每章那行日志末尾报「正文 N 字 / 目标 M 字（比 0.NN）」；跳过的章里 `prompt_version` 落后的报一句 |
+| `prompts/L2-topic.md` | 升到 `version: L2-topic@0.2`。「零 · 输入」的头例子从六行变八行并说明这两个数；「二」里新增「字数预算」一节（目标是**全章 `paras` 加起来**、是目标不是上限、怎么达到、四种禁止的省字法）；铁律 4 那句「整理稿写短了不算成绩」改成「压字数只能压在**他怎么说的**上面」 |
+| `scripts/digest.py` | `L2 通过` 那行加「正文合计 N 字 / 逐字稿 M 字，压缩比 0.NN」 |
+| `SPEC.md` | §4 L2 的输入多了两行预算，另记字数怎么算、四种禁止的省字法、**字数不设闸门**、日志报什么、prompt 升版只报不重跑；§5.2 记下这份文本的字数数法（行号 / 时刻 / 说话人前缀是脚手架，不计）。§1.3 上一个 commit 已改好，本轮没动 |
+| `tests/fixtures/mkfixtures.py` | 新增 `raw-bad/EP91/L2-market-short.raw.json`：话题、`kind`、锚点全照旧，只把 `paras` 砍到 15 字（`market` 章目标 192 字）。schema 合法，所以跟好响应一样带 `structured_output` |
+| `tests/` | `test_sm_l2.py` +6、`test_s2_topics.py` +3（另有 1 条改判据） |
+
+**`body_chars` 数的是行表自己的 `text`，不是渲染好的文本**——`format_lines` 印出来的
+`35 [00:19:00] 阿桥: ` 是代码加的脚手架，从渲染文本里数的话，每换一次说话人就多算
+两个汉字（说话人名是汉字），一章下来几十个字的虚高，压缩比跟着虚低。两边同一个
+字段，不另写一套解析（四问 4）。
+
+**代码一条字数闸门都没加**（要做什么 5、红线 2）。为了短而删内容比超预算糟得多，
+而代码判不了「短是因为写法好还是因为把事删了」；判不了的不打回，真假由人拿 EP02
+对着基线判（#57）。验收 7 就是钉这件事的。
+
+### 6.2 「可见变化」演示（fixture 副本，合成内容）
+
+```
+$ rm -rf /tmp/qa && mkdir -p /tmp/qa && cp -r tests/fixtures/vault /tmp/qa/vault
+$ python scripts/digest.py ep EP91 --vault /tmp/qa/vault --runner fake:tests/fixtures/raw
+```
+
+**一、`_pairs/EP91/L2-market.in.md` 的头**——从六行变八行，多出来的是最后两行：
+
+```
+episode: EP91
+章节: market
+标题: 河口夜市搬迁滨江路、回到大桥：货车与浮桥、结尾弹幕
+范围: 00:19:00–00:42:40
+行号: 35–76
+说话人: 阿桥（主播）、老周（嘉宾）
+本章逐字稿: 959 字
+整理稿目标: 约 192 字
+```
+
+959 是第 35–76 行正文的汉字数（行号、`[00:19:00]`、`阿桥: ` 都不算），192 =
+round(959 × 0.2)。`bridge` 章同理：第 1–34 行 898 字、目标 180 字。`---` 分隔行、
+章节地图、三段切片一个字没变。
+
+**二、stdout**——每章那一行末尾多出实际对目标，最后一行多出整集压缩比：
+
+```
+[09:40:30] L2 逐章节整理：2 章，一章一次调用（sonnet / effort medium，并发 3，超时 1800s/章，prompt L2-topic@0.2@963e68d7）
+[09:40:30]     L2-market 第 1 次调用（sonnet / effort medium）…
+[09:40:30]     L2-bridge 第 1 次调用（sonnet / effort medium）…
+[09:40:30]     L2 market：3 个话题（talk 2、aside 1、filler 0），正文 785 字 / 目标 192 字（比 0.82）
+[09:40:31]     L2 bridge：2 个话题（talk 1、aside 0、filler 1），正文 653 字 / 目标 180 字（比 0.73）
+[09:40:31] L2 通过：5 个话题（talk 3、aside 1、filler 1）；正文合计 1438 字 / 逐字稿 1857 字，压缩比 0.77 → _digest/EP91/topics.json
+[09:40:31] 整理稿已写进 10-Episodes/EP91 河口夜话 2026年3月12日 北港大桥与夜市.md（整理: done，整理版本 L2-topic@0.2）
+退出码 0
+```
+
+fixture 的 `paras` 是第一轮按「全长、不压条目」写的，所以比值 0.73 / 0.82 —— 和
+EP02 实跑 `@0.1` 的 0.73 是同一个量级。**这正是这一轮要治的病**：fixture 本身不会
+因为 prompt 升版而变短（它是存档响应，不过模型），真正的效果只能由人拿 EP02 重跑
+看（第 6.4 节）。日志把这个数摆到人眼前，就不用自己去数字数了。
+
+**三、prompt 升版之后再跑一次**（把片段的 `provenance.prompt_version` 手改回
+`@0.1` 模拟）：
+
+```
+[09:40:36]     L2：2 章已完成，跳过不调用——要重跑加 --force
+[09:40:36]     L2：2 章的 prompt_version 落后于当前 prompt（L2-topic@0.1 → L2-topic@0.2），要重跑加 --force
+```
+
+行为照旧（有 `topics.json` 且片段齐就算完成、跳过，**不自动重跑**——每改一次 prompt
+就全集重烧太贵），只多这一句：不报的话，人手里这份整理稿是哪一版 prompt 写的，除了
+逐个翻 `provenance` 没有别的办法看出来（四问 3）。
+
+### 6.3 沙箱内已验证清单（第二轮验收标准 → 测试）
+
+| # | 验收标准 | 测试 |
+|---|---|---|
+| 1 | `hanzi` / `body_chars`：五行合成行表（含 `DSA 这个组织`、`2.6 亿`、行内空格、纯标点），返回值 45 = 手算的汉字数；行号 / `[HH:MM:SS]` / `名: ` / 拉丁词 / 数字 / 标点 / 空白一个都没算进去 | `test_sm_l2.py::test_only_hanzi_are_counted`、`::test_the_line_head_is_not_part_of_the_body`（渲染出来的文本比正文多的 6 个汉字，恰好是三次说话人前缀） |
+| 2 | `paras_chars(["[00:01:00]<who>阿桥</who>说这事<hedge>大概</hedge>成了"])` == 9（标记本身不算、包着的字算） | `::test_paras_chars_counts_inside_the_markers_but_not_the_markers` |
+| 3 | `head_block` 八行、顺序固定；`整理稿目标` == round(`本章逐字稿` × 0.2)；`本章逐字稿` == `body_chars(body)` | `::test_the_head_carries_the_budget`、`::test_head_is_one_key_per_line_and_the_map_marks_this_chapter`（八行全文比对） |
+| 4 | 端到端：`L2-market.in.md` 头八行、两个新键 = 按 fixture 手算的 959 / 192，`L2-bridge.in.md` 898 / 180；`---`、章节地图、三段切片一个字没变 | `test_s2_topics.py::test_the_head_carries_this_chapters_word_budget`、`::test_the_chapter_slice_input_is_labelled` |
+| 5 | prompt：首行 `^version: L2-topic@0\.2$`；含 `整理稿目标`、「这是目标，不是上限」、四种禁止省字法的说法；**不含** `12000` / `12,000` / `1500` / `3000` / `1.2 万` | `test_sm_l2.py::test_the_prompt_teaches_the_budget_without_hard_coding_a_number` |
+| 6 | 日志：每章一行含「正文 N 字 / 目标 M 字（比 0.NN）」、末行含「压缩比」；数值就是从 fixture 的 `paras` 里数出来的（bridge 653、market 785、合计 1438 / 1857） | `test_s2_topics.py::test_stdout_reports_what_was_written_against_the_budget`、`::test_stdout_reports_steps_and_counts_only`（红线 6：日志里查不到产物内容） |
+| 7 | **不设闸门**：正文只有目标十分之一的响应 → `check_frag` 返回空、片段写出、不进 `_failed/`、退出码 0；十倍的同样通过 | `test_s2_topics.py::test_a_chapter_far_under_budget_still_lands`（端到端跑 `raw-bad/EP91/L2-market-short.raw.json`）、`test_sm_l2.py::test_the_budget_is_not_a_gate`（两个方向） |
+| 8 | 幂等：头多两行不影响 `topics.json` 的字节稳定性——固定时钟跑两次逐字节相同，第二次 runner 调用 0 次 | `test_s2_topics.py::test_rerun_is_byte_identical_and_only_missing_chapters_are_refilled`（第一轮就有，本轮照旧通过） |
+| 9 | 回归：第一轮 12 条验收标准全部照旧通过，108 个老用例一个都没改判据 | 只改了两条硬编码：`test_sm_l2.py::test_head_is_one_key_per_line_and_the_map_marks_this_chapter`（六行 → 八行）、`test_s2_topics.py::test_ep91_end_to_end`（`整理版本` 钉的版本号 `@0.1` → `@0.2`）。其余 106 条一字未动 |
+| 四问 3 | prompt 升版不自动重跑，但要报一句落后；`--force` 重跑之后不再报 | `test_sm_l2.py::test_a_chapter_written_by_an_older_prompt_is_reported_not_rerun` |
+
+红线映射：**红线 2** —— prompt 里写死四种禁止的省字法（验收 5），代码一条闸门都
+不加（验收 7）；**红线 6** —— 日志只报字数，不打印产物内容（验收 6 的后半条）；
+**红线 10** —— 新 fixture 的内容是编的，由 `mkfixtures.py` 生成，重生成后除这一份
+新文件与 README 一行外逐字节不变。
+
+### 6.4 我认为第二轮风险最高的点
+
+**模型拿删内容来达标，而代码看不见。** 这一轮在教模型省字，唯一真正的风险就是
+它把「事」也省掉了——删一个话题、把 `talk` 降成 `filler`（那样它整个从笔记上消
+失，只在块首行留一句「另有 N 段杂项未渲染」）、把叙述压成条目式要点。prompt 里
+这四种写成了反例明确禁掉，但**沙箱里验不了**：fixture 是存档响应，不过模型。
+代码这边也判不了（短是因为写法好还是因为把事删了，只有读过逐字稿的人知道），
+所以故意一条闸门都没加。
+
+**这意味着合并后 6.5 的第 2 步是必做的，不是可选的**：逐章对着
+`_lab\EP02-baseline-20260918\` 看有没有整段消失的事。压缩比降到 0.2 但内容被删
+掉了的话，所有自动化指标都是绿的，只有人能看出来。
+
+次一级的：`本章逐字稿` 这个数只数汉字，**中英混排多的集会偏低**（「DSA 这个组织」
+算 4 个字）。EP02 这种以中文为主的集影响不大；真出现大段英文的集，目标字数会偏
+紧，读日志时留意比值是不是系统性偏高。
+
+### 6.5 第二轮的真实样例验证（人，合并后做，不算验收）
+
+对照组已冻结在 vault：`_lab\EP02-baseline-20260918\`（2026-09-18 那趟的逐字稿、
+58 个 frag、`_pairs`、整理稿正文 40,679 字 / 压缩比 0.73）。
+
+```powershell
+del "D:\obsidian-task\任务栏\story-machine\_digest\EP02\topics.json"
+python scripts\digest.py ep EP02 --vault "D:\obsidian-task\任务栏\story-machine"
+```
+
+删 `topics.json` 等于把 12 章全标成未完成（完成判据是「话题表里有它的话题 + 片段
+文件都在 + 首尾铺满这一章」）；`chapters.json` 还在，L1 会跳过，不重烧那 $0.5。
+**不要用 `--force`**——那会连 L1 一起重跑。
+
+跑之前先确认日志里出现了这一句（没有就说明片段的 `prompt_version` 已经是 `@0.2`，
+你删错了东西）：
+
+```
+    L2：12 章的 prompt_version 落后于当前 prompt（L2-topic@0.1 → L2-topic@0.2），要重跑加 --force
+```
+
+然后看三样：
+
+1. **压缩比**。日志最后一行直接报「正文合计 N 字 / 逐字稿 M 字，压缩比 0.NN」，
+   目标是 0.2 上下（基线是 0.73；原型在同一集上做到过 0.214）。每章那一行也各报
+   一个比值：**挑比值最低的两三章重点读**，它们最可能是把事删了。
+2. **逐章对照基线看有没有整段消失的事**（红线 2，这一轮唯一真正的风险）。
+   基线的 58 个 frag 在 `_lab\EP02-baseline-20260918\`，新的在 `_digest\EP02\`。
+   两边的 `topics.json` 各取 `title` + `start` 列一列比：
+   - 话题数少了一大截（比如 58 → 30）：模型在合并话题，去读合并掉的那几段。
+   - 某个基线里是 `talk` 的话题，新的一趟变成了 `aside` 或 `filler`：**直接翻它的
+     片段**，看是不是真的没内容——这是最隐蔽的一种删法，`filler` 在笔记上一个字
+     都不出现。
+   - 基线里某一章有的数字 / 日期 / 人名，新的一趟 `claims` 里没有了：那是删事，
+     不是省字。
+   - 段落变成「他讲了三点：一、…… 二、……」这种条目式：prompt 明令禁止的四种之
+     一，说明那一段没听进去。
+3. **在 Obsidian 读，计时**（#50 的判据是 30 分钟内读完；基线那版约 100 分钟）。
+   读的时候留意有没有哪一段读着缺了上下文、跳步。
+
+三样都过了，`@0.2` 就算立住了；任意一样不过，改 `prompts\L2-topic.md` 升
+`version:` 再来一趟——**不要去代码里加字数闸门**（要做什么 5）。
+
+**回退**：`_lab\EP02-baseline-20260918\` 里的 frag 拷回 `_digest\EP02\`、连
+`topics.json` 一起，再跑一次 `-Extract EP02`（L1 L2 都跳过，只重渲染）就回到
+`@0.1` 那一版的笔记。整张 PR 回退用 `git revert`；只回退 prompt 的话，
+`git checkout <上一版> -- prompts/L2-topic.md` 之后头里那两行还在（代码算的），
+模型只是不再被告知怎么用它们。
