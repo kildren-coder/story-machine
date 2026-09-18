@@ -62,13 +62,17 @@ class GateReport:
         return {"ep": self.ep, "generated_at": self.generated_at, "topics": self.topics}
 
 
-def read_json(path: str | Path):
-    """闸门这一侧读 JSON **不吞异常**：产物坏了当场炸。
+def read_doc(path: str | Path) -> dict:
+    """读一份 `_digest/` 的 JSON 产物，**不吞异常**：产物坏了当场炸。
 
     吞掉的话，读不出来的片段会被当成「这个话题没有引文」放行，人在笔记上看到的
-    是一节空话题，`gates.json` 还写着全 0（红线 9）。
+    是一节空话题，`gates.json` 还写着全 0（红线 9）。不是对象也算坏——照着它往下
+    跑只会在别处炸出一句看不懂的 AttributeError。
     """
-    return json.loads(Path(path).read_bytes().decode("utf-8"))
+    obj = json.loads(Path(path).read_bytes().decode("utf-8"))
+    if not isinstance(obj, dict):
+        raise ValueError(f"{Path(path).name} 顶层不是对象")
+    return obj
 
 
 # ---------------------------------------------------------------- 闸门 4：形状
@@ -149,11 +153,13 @@ def gate_frag(frag: dict, chapter: dict, nsegs: list[tuple[str, dict]],
     if isinstance(frag.get("quotes"), list):
         kept = []
         for q in frag["quotes"]:
-            if not isinstance(q, dict):
-                entry["quotes_dropped"] += 1        # 形状已经报在 schema 那一栏
+            # 形状不对的（不是对象、`text` 不是字符串）照删：它不可能是逐字稿里的
+            # 一句话，而且 schema 那一栏已经把它报出来了
+            if not isinstance(q, dict) or not isinstance(q.get("text"), str):
+                entry["quotes_dropped"] += 1
                 continue
             ts = parse_hms(q.get("ts"))
-            seg = hit_segment(norm(q.get("text")), ts, nsegs)
+            seg = hit_segment(norm(q["text"]), ts, nsegs)
             if seg is None:
                 entry["quotes_dropped"] += 1
                 continue
@@ -177,7 +183,8 @@ def gate_frag(frag: dict, chapter: dict, nsegs: list[tuple[str, dict]],
     if isinstance(frag.get("asr"), list):
         kept_asr = []
         for a in frag["asr"]:
-            heard = norm(a.get("heard")) if isinstance(a, dict) else ""
+            heard = norm(a["heard"]) if isinstance(a, dict) \
+                and isinstance(a.get("heard"), str) else ""
             if heard and any(heard in n for n in nslice):
                 kept_asr.append(a)
             else:
@@ -197,22 +204,22 @@ def run_gates(paths, ep: str, *, generated_at: str | None = None, log=print) -> 
     翻新一遍，人对着盘上的时间找「这一趟到底改了什么」才找得准。
     """
     d = paths.digest(ep)
-    chapters = {c["id"]: c for c in (read_json(d / "chapters.json").get("chapters") or [])
+    chapters = {c["id"]: c for c in (read_doc(d / "chapters.json").get("chapters") or [])
                 if isinstance(c, dict) and c.get("id")}
-    heads = read_json(d / "topics.json").get("topics") or []
+    heads = read_doc(d / "topics.json").get("topics") or []
     segments, _ = read_transcript(paths.transcript(ep))
     nsegs = [(norm(s.get("text")), s) for s in segments]
     lines = build_lines(segments)
     nslices: dict[str, list[str]] = {}
 
     report = GateReport(ep=ep, generated_at=generated_at or now_iso())
-    changed = 0
+    pending: list[tuple[Path, dict]] = []
     for head in heads:
         tid = str((head or {}).get("id") or "").strip()
         if not tid:
             raise ValueError(f"{paths.rel(d / 'topics.json')} 里有话题没有 `id`")
-        frag = read_json(d / f"frag-{tid}.json")
-        ch_id = frag.get("chapter") if isinstance(frag, dict) else None
+        frag = read_doc(d / f"frag-{tid}.json")
+        ch_id = frag.get("chapter")
         if ch_id not in chapters:
             # 孤儿片段（L1 重切过而 L2 没重跑）。这里判不了它该归哪一章，闸门 2
             # 与闸门 5 就没有尺子可用——不许当成「全都通过」放行
@@ -220,18 +227,31 @@ def run_gates(paths, ep: str, *, generated_at: str | None = None, log=print) -> 
                              f"不在 {paths.rel(d / 'chapters.json')} 里")
         if ch_id not in nslices:
             ch = chapters[ch_id]
-            groups = slice_chapter(lines, parse_hms(ch.get("start")) or 0,
-                                   parse_hms(ch.get("end")) or 0, PAD_S)
+            c0, c1 = parse_hms(ch.get("start")), parse_hms(ch.get("end"))
+            if c0 is None or c1 is None:
+                # 章节表的时刻是 L1 的代码填的，读不出来就是产物坏了。**不许退成 0**
+                # ——那会算出一段错的切片，然后照着它删掉本来该留的 ASR 条目，
+                # 盘上还看不出是 chapters.json 的问题（片段那边有 `schema` 一栏可以
+                # 记，章节表这边没有，所以只能抛）
+                raise ValueError(f"{paths.rel(d / 'chapters.json')} 里章 {ch_id} 的 "
+                                 f"start / end 读不出时刻（{ch.get('start')!r}、"
+                                 f"{ch.get('end')!r}）")
+            groups = slice_chapter(lines, c0, c1, PAD_S)
             nslices[ch_id] = [norm(ln["text"]) for g in groups for ln in g]
 
         out, entry = gate_frag(frag, chapters[ch_id], nsegs, nslices[ch_id])
-        path = d / f"frag-{tid}.json"
-        if json_bytes(out) != path.read_bytes():
-            write_json(path, out)
-            changed += 1
+        pending.append((d / f"frag-{tid}.json", out))
         report.topics[tid] = entry
         report.frags[tid] = out
 
+    # **全集都过完了才落盘**：中途抛出去的那一趟，盘上不该留下「删了一半」的片段
+    # ——`gates.json` 还没写出来，那些删除就再也没有记录了，下一趟看到的是已经被
+    # 删过的片段、计数却是 0（红线 9：绝不静默丢单元）
+    changed = 0
+    for path, out in pending:
+        if json_bytes(out) != path.read_bytes():
+            write_json(path, out)
+            changed += 1
     write_json(d / "gates.json", report.doc())
     log(f"    L3：{len(report.topics)} 个话题过了闸门，写回 {changed} 份片段"
         f"（越界的段只记不删，红线 2）")

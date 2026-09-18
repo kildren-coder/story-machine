@@ -261,6 +261,50 @@ def test_a_missing_fragment_raises(tmp_path):
         run_gates(paths, "EP99", log=lambda _: None)
 
 
+def test_a_run_that_blows_up_halfway_leaves_nothing_on_disk(tmp_path):
+    """中途抛出去的一趟，一份片段都不许改：`gates.json` 还没写出来，删掉的东西就
+    再也没有记录了，下一趟看到的是删过的片段、计数却是 0（红线 9）。
+
+    第二个话题是孤儿（章不在章节表里），第一个话题有一条该删的引文。
+    """
+    good = frag(quotes=[quote("工期要拖到明年年底", "00:00:00")])
+    orphan = frag(tid="ch9-01", chapter="ch9")
+    paths = build_vault(tmp_path, [good, orphan])
+    before = (paths.digest("EP99") / "frag-ch1-01.json").read_bytes()
+
+    with pytest.raises(ValueError, match="ch9"):
+        run_gates(paths, "EP99", log=lambda _: None)
+    assert (paths.digest("EP99") / "frag-ch1-01.json").read_bytes() == before
+    assert not (paths.digest("EP99") / "gates.json").exists()
+
+
+def test_a_chapter_with_an_unreadable_time_raises(tmp_path):
+    """章节表的时刻是 L1 的代码填的，读不出来就是产物坏了——不许退成 0 算出一段
+    错的切片，再照着它删掉本该留下的 ASR 条目。"""
+    chapters = json.loads(json.dumps(CHAPTERS))
+    chapters["chapters"][0]["end"] = "年底"
+    paths = build_vault(tmp_path, [frag(asr=[{"heard": "西城菜场", "means": "城西菜场"}])],
+                        chapters=chapters)
+    with pytest.raises(ValueError, match="ch1"):
+        run_gates(paths, "EP99", log=lambda _: None)
+
+
+def test_a_quote_whose_text_is_not_a_string_is_dropped_not_crashed(tmp_path):
+    """手改坏的片段不该炸出一句 TypeError：不是字符串的引文照删（schema 那一栏
+    同时把它报出来），ASR 条目同理。"""
+    f = frag(quotes=[{"ts": "00:00:00", "who": "阿桥", "text": 5},
+                     quote("先说结论，工期要拖到年底。", "00:00:00")],
+             asr=[{"heard": 7, "means": "城西菜场"}])
+    paths = build_vault(tmp_path, [f])
+    report = run_gates(paths, "EP99", log=lambda _: None)
+
+    entry = report.topics["ch1-01"]
+    assert entry["quotes_dropped"] == 1 and entry["asr_dropped"] == 1
+    assert [q["text"] for q in read(paths.digest("EP99") / "frag-ch1-01.json")["quotes"]] \
+        == ["先说结论，工期要拖到年底。"]
+    assert any("`text` 不是字符串" in e for e in entry["schema"])
+
+
 def test_an_orphan_fragment_raises(tmp_path):
     """片段指着章节表里没有的章（L1 重切过而 L2 没重跑）：闸门 2 与闸门 5 没有尺子
     可用，不许当成「全都通过」放行。"""
