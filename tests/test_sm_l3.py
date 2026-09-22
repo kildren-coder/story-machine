@@ -237,6 +237,18 @@ def test_only_segments_within_two_minutes_of_the_timestamp_are_candidates():
     assert out["quotes"] == []
 
 
+def test_a_quote_longer_than_the_segment_is_dropped_without_aligning(monkeypatch):
+    """比整段还长出预算之外的引文，一格 DP 都不该算：删到那么短的跨度也至少要差
+    这么多刀。模型偶尔会把一整节抄进 `text`，没这一刀一集能卡好几秒。"""
+    import sm.l3 as l3
+
+    calls = []
+    monkeypatch.setattr(l3, "align_span", lambda q, n: calls.append(n) or (0, 0, len(n)))
+    out, entry = gate(frag(quotes=[quote("改造预算是一千二百万，" * 50, "00:01:00")]))
+    assert (entry["quotes_snapped"], entry["quotes_dropped"]) == (0, 1)
+    assert out["quotes"] == [] and calls == []
+
+
 def test_a_verbatim_quote_is_never_snapped():
     """三档顺序固定：逐字命中的不走归一档——`quotes_snapped` 只数真被换过的。"""
     text = "改造预算是一千二百万，这个数是区里通报里写的。"

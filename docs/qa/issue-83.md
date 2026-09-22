@@ -1,7 +1,7 @@
 # QA — issue #83 闸门 1 近似命中归一：少抄或错抄一两个字的引文换成逐字稿原句留下
 
-分支 `agent/issue-83`。沙箱内 `bash scripts/test.sh` 全绿（202 个 pytest 用例，比
-开工时的 189 个多 13 个），没有调用过 `claude -p`，没有碰过 vault，所有用例跑在
+分支 `agent/issue-83`。沙箱内 `bash scripts/test.sh` 全绿（203 个 pytest 用例，比
+开工时的 189 个多 14 个），没有调用过 `claude -p`，没有碰过 vault，所有用例跑在
 `tests/fixtures/vault/` 的临时副本上。
 
 #53 的闸门 1 只有「逐字命中 / 删」两档。EP02 实跑 171 条引文删 1 条，删的那条是
@@ -27,6 +27,22 @@
 
 **没动的**：`prompts/*.md`（票面明确不动）、L1 / L2 / L4 以后的层、闸门 2 / 3 / 5
 的判法、`quotes[].ctx` 的语义（照旧是所在段全文）。
+
+实现完成后派了一个 sonnet 子代理做对抗式复查：拿暴力实现给 `align_span` 对拍了
+九千组随机串（tie-break 也对拍，零分歧）、给 `norm_map` 跑了五千组不变量、给幂等性
+跑了五千组「随机改一个字再喂回去」，都没翻出问题；逮到一个真缺陷，已修并配了用例：
+
+- **超长引文会让对齐空转**（`sm/l3.py`）。`align_span` 是 O(引文 × 段)，而 `text`
+  的长度上游没有任何闸门管；模型偶尔会把一整节抄进 `text`，实测两万字的「引文」
+  能让一集卡好几秒。现在加一刀**精确剪枝**：引文比整段还长出预算之外时直接跳过
+  这一段（对齐进段内任何跨度都至少要差这么多刀，算了也是白算），语义一个字没变
+  （`test_a_quote_longer_than_the_segment_is_dropped_without_aligning`，用
+  monkeypatch 钉住「一格 DP 都没算」）。
+
+同一趟复查提了一条我没改的：`near()` 里 `float(seg.get("start") or 0)` 在段的
+`start` 不是数字时会抛 `ValueError`。这条在真实链路上够不着——`read_transcript()`
+排序时就已经 `float()` 过一遍了，坏的逐字稿在进闸门之前就炸了；而 `hit_segment()`
+从 #53 起就是同一种写法，单独给 `near()` 加一层防御只会让两处口径不一致。
 
 现有用例跟着改档的两处，评审时值得对一眼：
 
@@ -166,7 +182,9 @@ $ python scripts/digest.py ep EP91 --vault /tmp/demo83/vault --runner fake:tests
 
 票面之外顺手钉住的：`norm_map` 与 `norm` 归的是同一个文本、下标表指得回原文
 （`test_sm_l3.py::test_norm_map_says_where_every_character_came_from`）；改写超出预算
-的照删且入参没被就地改掉（`::test_a_quote_that_is_not_verbatim_is_dropped_and_counted`）。
+的照删且入参没被就地改掉（`::test_a_quote_that_is_not_verbatim_is_dropped_and_counted`）；
+超长引文一格 DP 都不算（`::test_a_quote_longer_than_the_segment_is_dropped_without_aligning`，
+见第 1 节的自审那条）。
 
 ---
 

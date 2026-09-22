@@ -178,6 +178,11 @@ def snap_segment(nquote: str, ts: int | None, nsegs: list[tuple[str, dict]],
     for nseg, seg in nsegs:
         if not nseg or not near(seg, ts):
             continue
+        # 引文比整段还长出预算之外：对齐进段内任何一个跨度都至少要差这么多刀，
+        # 不必逐格算。模型偶尔会把一整节抄成「引文」，没这一刀 DP 会按它的长度
+        # 乘段长空转一遍（2 万字的「引文」能让一集卡好几秒）
+        if len(nquote) - len(nseg) > budget:
+            continue
         d, i, j = align_span(nquote, nseg)
         if d > budget or j <= i:
             continue
