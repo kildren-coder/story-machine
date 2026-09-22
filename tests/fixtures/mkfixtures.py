@@ -517,6 +517,20 @@ FRAG_MARKET_BAD["paras"][2] = FRAG_MARKET_BAD["paras"][2].replace("<hedge>好像
 # 闸门 5：asr.heard 在切片里根本不存在（模型编的）
 FRAG_MARKET_BAD["asr"] = [{"heard": "冰江路", "means": "滨江路"}]
 
+# 闸门 1 归一档（#83）的五个样本：逐字命中 / 多抄一字 / 丢限定词 / 改写太多 /
+# 逐字稿里根本没有。段落沿用上面那份（少了 <hedge>），asr 清空——这一份只考闸门 1
+FRAG_MARKET_SNAP = copy.deepcopy(FRAG_MARKET_BAD)
+FRAG_MARKET_SNAP["quotes"] = [
+    q(S, 35, "阿桥", "河口晚报今天早上发了报道，说夜市要整体搬到滨江路"),
+    {"ts": ts(S, 37), "who": "老周", "text": "我上个月去数过，摊位不到一百个摊"},
+    {"ts": ts(S, 41), "who": "老周", "text": "六月底是赶在暑假前，暑假是夜市生意最好的时候"},
+    {"ts": ts(S, 56), "who": "老周", "text": "便宜两百一年两千四，人流少根本补不回来"},
+    {"ts": "00:31:00", "who": "阿桥", "text": "夜市搬走以后老街的房租肯定要跌"},
+]
+FRAG_MARKET_SNAP["claims"] = [FRAG_MARKET["claims"][i] for i in (0, 2, 4)]
+FRAG_MARKET_SNAP["channels"] = FRAG_MARKET["channels"][:1]
+FRAG_MARKET_SNAP["asr"] = []
+
 T = EP92
 
 
@@ -699,6 +713,8 @@ wjson(ROOT / "digest/2026-03-12/events.json", with_prov(EVENTS, prov("L4", "all"
 _market = next(f for f in EP91_FRAGS if f["id"] == "market-01")
 wjson(ROOT / "l3/frag-market-01.bad.json",
       {**_market, **{k: FRAG_MARKET_BAD[k] for k in CONTENT_KEYS}})
+wjson(ROOT / "l3/frag-market-01.snap.json",
+      {**_market, **{k: FRAG_MARKET_SNAP[k] for k in CONTENT_KEYS}})
 
 
 # ------------------------------------------------------------------ 假 claude 原始响应（--output-format json 的信封）
@@ -768,7 +784,8 @@ README = f"""# tests/fixtures — 合成样例
 | `vault/30-Events/2026-northbridge-toll.md` | first_seen 2026-03-05，「我的判断」有人写的内容 | §5.8 |
 | `digest/EP91/`、`digest/EP92/` | L1 章节表 `chapters.json`、L2 片段 `frag-<话题>.json` 与话题表 `topics.json` 的**解析后产物**形状（带 `provenance`） | §5.3、§5.4、§9 |
 | `digest/2026-03-12/events.json` | L4 事件清单：跨 EP 合并、同一 EP 内被打断的同一事件合并、沿用已有事件 id | §5.5 |
-| `l3/frag-market-01.bad.json` | 故意违规的片段：闸门 1（引文改写）、2（时间戳越界）、3（丢 hedge）、5（asr.heard 不存在） | §4 L3 |
+| `l3/frag-market-01.bad.json` | 故意违规的片段：闸门 1（引文多抄一个「摊」→ 归一）、2（时间戳越界）、3（丢 hedge）、5（asr.heard 不存在） | §4 L3 |
+| `l3/frag-market-01.snap.json` | 闸门 1 近似命中归一的五档：逐字命中 1 条、多抄一字 1 条（「一百个摊」）、丢限定词 1 条（「六月底是赶在」少了「应该」）、改写太多 1 条（「便宜两百一年两千四…」）、逐字稿里没有 1 条；`asr` 为空 | §4 L3 第 1 条 |
 | `raw/<EP 或日期>/<层>-<单元>.raw.json` | 假 `claude -p --output-format json` 信封；L1 / L2 带 `structured_output`（`--json-schema` 的形状），L4 的 `result` 是围栏 JSON | §4.1 |
 | `raw-bad/…` | 坏响应（多数只有 `result`）：L1 行号不在这一集里 + 缺 title；L2 闸门违规；L2 纯散文无 JSON；L2 正文只有字数预算的十分之一（`L2-market-short`，schema 合法故带 `structured_output`，L2 不为字数设闸门）；L4 引用不存在话题 + aside 成事件 | §4.1 |
 
