@@ -17,6 +17,7 @@
 | `digest/EP91/`、`digest/EP92/` | L1 章节表 `chapters.json`、L2 片段 `frag-<话题>.json` 与话题表 `topics.json` 的**解析后产物**形状（带 `provenance`） | §5.3、§5.4、§9 |
 | `digest/2026-03-12/events.json` | L4 事件清单：跨 EP 合并、同一 EP 内被打断的同一事件合并、沿用已有事件 id | §5.5 |
 | `l3/frag-market-01.bad.json` | 故意违规的片段：闸门 1（引文改写）、2（时间戳越界）、3（丢 hedge）、5（asr.heard 不存在） | §4 L3 |
+| `l3/frag-market-01.snap.json` | 闸门 1 近似命中归一的五档：逐字命中 1 条、多抄一字 1 条（「一百个摊」）、丢限定词 1 条（「六月底是赶在」少了「应该」）、改写太多 1 条（「便宜两百一年两千四…」）、逐字稿里没有 1 条；`asr` 为空 | §4 L3 第 1 条 |
 | `raw/<EP 或日期>/<层>-<单元>.raw.json` | 假 `claude -p --output-format json` 信封；L1 / L2 带 `structured_output`（`--json-schema` 的形状），L4 的 `result` 是围栏 JSON | §4.1 |
 | `raw-bad/…` | 坏响应（多数只有 `result`）：L1 行号不在这一集里 + 缺 title；L2 闸门违规；L2 纯散文无 JSON；L2 正文只有字数预算的十分之一（`L2-market-short`，schema 合法故带 `structured_output`，L2 不为字数设闸门）；L4 引用不存在话题 + aside 成事件 | §4.1 |
 
