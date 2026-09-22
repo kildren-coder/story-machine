@@ -15,9 +15,9 @@ import json
 import pytest
 
 import conftest                                          # noqa: F401  （挂 sys.path）
-from sm.l3 import gate_frag, hit_segment, run_gates
+from sm.l3 import align_span, gate_frag, hit_segment, run_gates, snap_segment
 from sm.paths import VaultPaths
-from sm.text import norm
+from sm.text import norm, norm_map
 
 A = "SPEAKER_00"
 
@@ -27,6 +27,7 @@ SEGS = [
     (21.0, 29.0, "先说结论，工期要拖到年底。"),
     (60.0, 100.0, "改造预算是一千二百万，这个数是区里通报里写的。"),
     (600.0, 640.0, "摊位现在是八十个，改造以后是一百个。"),
+    (660.0, 700.0, "这个名字变成 middle name 就是外国人的叫法。"),
     (880.0, 900.0, "这句话我在下半场还会再说一遍。"),
     (960.0, 990.0, "西城菜场这个写法我看到过两次。"),
     (1080.0, 1100.0, "这句话我在下半场还会再说一遍。"),
@@ -130,13 +131,142 @@ def test_ctx_is_the_whole_segment_nearest_to_the_timestamp():
 
 
 def test_a_quote_that_is_not_verbatim_is_dropped_and_counted():
+    """改写得超出预算（23 字差 3 处，容许 2 处）的照删：差这么多，代码已经分不清
+    模型指的是哪一句，换错句比删更糟（#83 闸门宽容度那一问）。"""
+    rewritten = "改造预算是一千三百万，这个数是市里通报里说的。"
     f = frag(quotes=[quote("改造预算是一千二百万，这个数是区里通报里写的。", "00:01:00"),
-                     quote("改造预算是一千三百万", "00:01:00")])
+                     quote(rewritten, "00:01:00")])
     out, entry = gate(f)
     assert entry["quotes_dropped"] == 1 and entry["quotes_out_of_range"] == 0
+    assert entry["quotes_snapped"] == 0 and entry["snapped"] == []
     assert [q["text"] for q in out["quotes"]] == ["改造预算是一千二百万，这个数是区里通报里写的。"]
     assert out["quotes"][0]["ctx"] == "改造预算是一千二百万，这个数是区里通报里写的。"
-    assert f["quotes"][1]["text"] == "改造预算是一千三百万"        # 入参没被就地改掉
+    assert f["quotes"][1]["text"] == rewritten                 # 入参没被就地改掉
+
+
+# ---------------------------------------------------------------- #83 验收 4：归一档
+
+def test_norm_map_says_where_every_character_came_from():
+    """`norm_map` 与 `norm` 归的是同一个文本，外加一张「第 i 个字在原文第几位」的表
+    ——归一档要靠它把跨度换回原文（连原文里的空格与英文一起）。"""
+    for s in ("改造预算是一千二百万。", "[00:01:00] 阿桥: 变成 middle name 就是",
+              "  空　白​混着零宽 ", "", None):
+        nstr, idx = norm_map(s)
+        assert nstr == norm(s)
+        assert len(idx) == len(nstr)
+        assert all(str(s or "")[j] == ch for ch, j in zip(nstr, idx))
+        assert idx == sorted(set(idx))
+
+
+def test_one_character_too_many_too_few_or_wrong_snaps_to_the_transcript():
+    """少抄 / 多抄 / 错抄一个字都归一：`text` 换成逐字稿那一段里的连续一截，
+    `gates.json` 记下模型写的与换成的（红线 9：不静默）。"""
+    said = "摊位现在是八十个，改造以后是一百个"          # 段在 00:10:00，末尾还有个句号
+    for wrong in ("摊位现在是八十个，改造以后是一百个个",   # 多一字
+                  "摊位现在是八十，改造以后是一百个",       # 少一字
+                  "摊位现在是八十个，改造以后是一白个"):    # 换一字
+        out, entry = gate(frag(end="00:11:00", quotes=[quote(wrong, "00:10:00")]))
+        assert entry["quotes_snapped"] == 1 and entry["quotes_dropped"] == 0
+        assert [q["text"] for q in out["quotes"]] == [said]
+        assert said in "摊位现在是八十个，改造以后是一百个。"      # 段原文里的连续一截
+        assert out["quotes"][0]["ctx"] == "摊位现在是八十个，改造以后是一百个。"
+        assert entry["snapped"] == [{"ts": "00:10:00", "from": wrong, "to": said}]
+
+
+def test_the_budget_is_one_edit_per_ten_characters_and_six_characters_minimum():
+    """阈值两条：每 10 字容许差一处（下限 1 处），短于 6 字不归一。
+
+    短引文一字之差可能就是另一句话；差得多了代码分不清模型指的是哪一句。
+    """
+    def snapped(text, ts="00:01:00"):
+        _, entry = gate(frag(quotes=[quote(text, ts)]))
+        return entry["quotes_snapped"], entry["quotes_dropped"]
+
+    assert snapped("改造预算是一千三百万，这个数是市里通报里") == (1, 0)   # 20 字差 2 处
+    assert snapped("改造预算是一千三百万，这个书是") == (0, 1)             # 15 字差 2 处
+    assert snapped("工期要拖着", "00:00:21") == (0, 1)                     # 5 字差 1 处
+
+
+def test_a_quote_one_character_past_a_full_stop_does_not_swallow_it():
+    """末尾多一个字、逐字稿那处紧跟标点：换成的那一截不含标点。
+
+    「先说结论，工期要拖到年底」与「……年底。」两种对法距离都是 1，同距离取最短
+    跨度——多吞一个他没说的句号，就是闸门自己写了个字（红线 2）。
+    """
+    out, entry = gate(frag(quotes=[quote("先说结论，工期要拖到年底底", "00:00:21")]))
+    assert entry["quotes_snapped"] == 1
+    assert [q["text"] for q in out["quotes"]] == ["先说结论，工期要拖到年底"]
+    assert out["quotes"][0]["ctx"] == "先说结论，工期要拖到年底。"
+
+
+def test_the_replacement_keeps_the_spaces_and_latin_letters_of_the_transcript():
+    """换成的是**原文**里的那一截：段里的空格与英文原样带回来，归一化之后仍是
+    段的子串（后面 `--replay` 与核查层比对的都是这个字面）。"""
+    seg_text = "这个名字变成 middle name 就是外国人的叫法。"
+    out, entry = gate(frag(end="00:11:00",
+                           quotes=[quote("变成 middle name 就是外国人的说法", "00:11:00")]))
+    assert entry["quotes_snapped"] == 1
+    got = out["quotes"][0]["text"]
+    assert got == "变成 middle name 就是外国人的叫法"
+    assert got in seg_text and norm(got) in norm(seg_text)
+
+
+def test_a_quote_whose_timestamp_is_unreadable_is_not_snapped():
+    """`ts` 读不出来就没有尺子定位：不归一，照「删」那一档走。
+
+    整集里找「最像的一句」是拿运气换准确——换错句比删更糟（#83 闸门宽容度）。
+    """
+    wrong = "摊位现在是八十个，改造以后是一百个个"
+    f = frag(quotes=[{"ts": "年底", "who": "阿桥", "text": wrong},
+                     {"who": "阿桥", "text": wrong}])
+    out, entry = gate(f)
+    assert (entry["quotes_snapped"], entry["quotes_dropped"]) == (0, 2)
+    assert out["quotes"] == [] and entry["snapped"] == []
+
+
+def test_only_segments_within_two_minutes_of_the_timestamp_are_candidates():
+    """候选段限 `ts` 前后各 2 分钟：同一句话在窗内窗外各有一段时归到窗内那段，
+    窗里一段都没有就不归一。"""
+    nearly = norm("这句话我在下半场还会说一遍")              # 两段都少了个「再」
+    assert snap_segment(nearly, 1080, nsegs())[1]["start"] == 1080.0
+    assert snap_segment(nearly, 880, nsegs())[1]["start"] == 880.0
+    assert snap_segment(nearly, 30, nsegs()) is None          # 窗里只有开场那两段
+
+    out, entry = gate(frag(quotes=[quote("这句话我在下半场还会说一遍", "00:00:30")]))
+    assert (entry["quotes_snapped"], entry["quotes_dropped"]) == (0, 1)
+    assert out["quotes"] == []
+
+
+def test_a_verbatim_quote_is_never_snapped():
+    """三档顺序固定：逐字命中的不走归一档——`quotes_snapped` 只数真被换过的。"""
+    text = "改造预算是一千二百万，这个数是区里通报里写的。"
+    out, entry = gate(frag(quotes=[quote(text, "00:01:00")]))
+    assert entry["quotes_snapped"] == 0 and entry["snapped"] == []
+    assert [q["text"] for q in out["quotes"]] == [text]
+
+
+def test_a_snapped_quote_that_is_out_of_range_is_only_counted_as_out_of_range():
+    """归一完再过闸门 2：越界的照删，只计 `quotes_out_of_range`。
+
+    `quotes_snapped` 只数真正留下来的——数了它，块首行的「归一 n 条」在笔记上
+    就对不上任何一条锚点。
+    """
+    f = frag(end="00:07:59", quotes=[quote("摊位现在是八十个，改造以后是一百个个", "00:10:00")])
+    out, entry = gate(f)
+    assert entry["quotes_out_of_range"] == 1
+    assert entry["quotes_snapped"] == 0 and entry["snapped"] == []
+    assert out["quotes"] == []
+
+
+def test_the_alignment_takes_the_shortest_span_with_the_fewest_edits():
+    """对齐本身：半全局编辑距离（插 / 删 / 换各 1，跨度两端不要钱），同距离取
+    最短跨度、再同取最靠前的跨度。"""
+    assert align_span("bcd", "abcde") == (0, 1, 4)             # 逐字就在中间
+    assert align_span("bxd", "abcde") == (1, 1, 4)             # 换一个字
+    assert align_span("bcd", "abcdbcde") == (0, 1, 4)          # 两处都行，取靠前的
+    assert align_span("abde", "abcde") == (1, 0, 5)            # 少抄了中间那个字
+    assert align_span("abcx", "abc.") == (1, 0, 3)             # 末尾多一字：不吞标点
+    assert align_span("", "abc") == (0, 0, 0)                  # 空引文对空跨度
 
 
 # ---------------------------------------------------------------- 验收 4：闸门 2
@@ -238,28 +368,37 @@ def test_gates_json_and_write_back(tmp_path):
 
     doc = read(paths.digest("EP99") / "gates.json")
     assert doc["ep"] == "EP99" and doc["generated_at"] == "2026-03-12T23:10:00+08:00"
-    assert doc["topics"]["ch1-01"] == {"quotes_dropped": 1, "quotes_out_of_range": 0,
-                                       "paras_out_of_range": [], "asr_dropped": 0,
-                                       "schema": "ok"}
+    assert doc["topics"]["ch1-01"] == {"quotes_snapped": 0, "quotes_dropped": 1,
+                                       "quotes_out_of_range": 0, "paras_out_of_range": [],
+                                       "asr_dropped": 0, "snapped": [], "schema": "ok"}
     written = read(paths.digest("EP99") / "frag-ch1-01.json")
     assert len(written["quotes"]) == 1
     assert written["quotes"][0]["ctx"] == "先说结论，工期要拖到年底。"
-    assert report.totals == {"quotes_dropped": 1, "quotes_out_of_range": 0,
-                             "asr_dropped": 0, "paras_out_of_range": 0}
+    assert report.totals == {"quotes_snapped": 0, "quotes_dropped": 1,
+                             "quotes_out_of_range": 0, "asr_dropped": 0,
+                             "paras_out_of_range": 0}
 
 
 def test_running_twice_changes_nothing(tmp_path):
-    """验收 6：同一输入跑两次，第二次计数全 0、片段逐字节不变（`ctx` 也不重写）。"""
+    """验收 6：同一输入跑两次，第二次计数全 0、片段逐字节不变（`ctx` 也不重写）。
+
+    归一的那条第二趟已经是逐字命中了（换成的就是逐字稿原句），所以
+    `quotes_snapped` 归 0 而不是又数一遍。
+    """
     paths = build_vault(tmp_path, [frag(quotes=[
         quote("先说结论，工期要拖到年底。", "00:00:00"),
-        quote("工期要拖到明年年底", "00:00:00")])])
-    run_gates(paths, "EP99", log=lambda _: None)
+        quote("工期要拖到明年年底", "00:00:00"),
+        quote("摊位现在是八十个，改造以后是一百个个", "00:10:00")])])
+    first_report = run_gates(paths, "EP99", log=lambda _: None)
+    assert first_report.totals["quotes_snapped"] == 1
     first = (paths.digest("EP99") / "frag-ch1-01.json").read_bytes()
     stamp = (paths.digest("EP99") / "frag-ch1-01.json").stat().st_mtime_ns
 
     report = run_gates(paths, "EP99", log=lambda _: None)
-    assert report.totals == {"quotes_dropped": 0, "quotes_out_of_range": 0,
-                             "asr_dropped": 0, "paras_out_of_range": 0}
+    assert report.totals == {"quotes_snapped": 0, "quotes_dropped": 0,
+                             "quotes_out_of_range": 0, "asr_dropped": 0,
+                             "paras_out_of_range": 0}
+    assert report.topics["ch1-01"]["snapped"] == []
     assert (paths.digest("EP99") / "frag-ch1-01.json").read_bytes() == first
     # 没变就不落盘：盘上的时间是人找「这一趟到底改了什么」的线索
     assert (paths.digest("EP99") / "frag-ch1-01.json").stat().st_mtime_ns == stamp
