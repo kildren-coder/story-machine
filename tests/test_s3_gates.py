@@ -11,6 +11,8 @@ from __future__ import annotations
 import json
 import shutil
 
+import pytest
+
 from conftest import FIX, RAW, note_text, run_ep
 from sm.runner import FakeRunner
 from sm.text import norm
@@ -128,6 +130,32 @@ def test_quotes_that_miss_by_a_character_come_back_as_the_transcript_said_it(vau
         assert not any(gone in r for r in rows)
     head = block_of(note_text(vault, "EP91")).splitlines()[3]
     assert "闸门：归一引文 2 条、删引文 2 条、越界 0 条、删 ASR 条目 0 条；" in head
+
+
+@pytest.mark.parametrize("which, want", [("snap", (2, 2, 0, 0)), ("bad", (1, 0, 1, 1))])
+def test_the_log_line_reports_the_same_four_numbers_as_gates_json(vault, capsys,
+                                                                 which, want):
+    """#83 验收 5 的另一半：`digest.py` 的 `L3 闸门：` 那行、块首行、`gates.json`
+    各自求和，四个数必须是同一套。
+
+    日志是人在跑完当下唯一看得见的东西——它和盘上的账对不上，人就会照着一个错
+    数字去判断这一集到底动过什么（红线 9 的阅读面形态）。两份片段都跑一遍：`snap`
+    那份归一与删一样多（2、2），单看它把两个键接反了也看不出来，`bad` 那份是 1、0。
+    """
+    with_market_01(vault, which)
+    assert run_ep(vault, "EP91", FakeRunner(RAW)) == 0
+    line = next(ln for ln in capsys.readouterr().out.splitlines() if "L3 闸门：" in ln)
+
+    keys = ("quotes_snapped", "quotes_dropped", "quotes_out_of_range", "asr_dropped")
+    topics = digest(vault, "EP91", "gates.json")["topics"].values()
+    total = {k: sum(t[k] for t in topics) for k in keys}
+    assert tuple(total[k] for k in keys) == want
+    counts = (f"归一引文 {total['quotes_snapped']} 条、"
+              f"删引文 {total['quotes_dropped']} 条、"
+              f"越界 {total['quotes_out_of_range']} 条、"
+              f"删 ASR 条目 {total['asr_dropped']} 条")
+    assert f"L3 闸门：{counts}，" in line
+    assert f"闸门：{counts}；" in block_of(note_text(vault, "EP91")).splitlines()[3]
 
 
 def test_a_snapped_episode_run_twice_snaps_nothing_the_second_time(vault):

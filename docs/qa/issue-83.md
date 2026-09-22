@@ -1,8 +1,8 @@
 # QA — issue #83 闸门 1 近似命中归一：少抄或错抄一两个字的引文换成逐字稿原句留下
 
-分支 `agent/issue-83`。沙箱内 `bash scripts/test.sh` 全绿（203 个 pytest 用例，比
-开工时的 189 个多 14 个），没有调用过 `claude -p`，没有碰过 vault，所有用例跑在
-`tests/fixtures/vault/` 的临时副本上。
+分支 `agent/issue-83`。沙箱内 `bash scripts/test.sh` 全绿（205 个 pytest 用例，比
+开工时的 189 个多 16 个，其中 2 个是评审补的），没有调用过 `claude -p`，没有碰过
+vault，所有用例跑在 `tests/fixtures/vault/` 的临时副本上。
 
 #53 的闸门 1 只有「逐字命中 / 删」两档。EP02 实跑 171 条引文删 1 条，删的那条是
 模型把「基本上可以认为」抄成「基本可以认为」——逐字稿原句就在旁边，删掉不如换成
@@ -23,7 +23,7 @@
 | `scripts/digest.py` | `L3 闸门：` 那行同样多一个「归一引文 n 条」 |
 | `SPEC.md` | §4 L3 第 1 条写成三档（含两个阈值与 tie-break 顺序）；「只删、只警、只补 `ctx`」改成「只删、只警、只补 `ctx`、只把近似命中的 `quotes[].text` 换成逐字稿原文」；`gates.json` 字段加两个键；§5.4 注明 `text` 可能被 L3 换成逐字稿原文；§5.7 块首行四个数 |
 | `tests/fixtures/mkfixtures.py` | 把出票时手写进仓库的 `l3/frag-market-01.snap.json` 接回生成脚本（脚本每次跑都先 `rmtree` 掉 `l3/`，不接回去的话谁重生成一次这份片段就没了）；速查表里 `.bad.json` 那行改准 |
-| `tests/` | `test_sm_l3.py` +10、`test_s3_gates.py` +3；`test_sm_render_ep.py` 的 `ZERO` 与两条块首行断言跟着改 |
+| `tests/` | `test_sm_l3.py` +10、`test_s3_gates.py` +3（评审又 +1，参数化两份片段共 2 个用例）；`test_sm_render_ep.py` 的 `ZERO` 与两条块首行断言跟着改 |
 
 **没动的**：`prompts/*.md`（票面明确不动）、L1 / L2 / L4 以后的层、闸门 2 / 3 / 5
 的判法、`quotes[].ctx` 的语义（照旧是所在段全文）。
@@ -177,7 +177,7 @@ $ python scripts/digest.py ep EP91 --vault /tmp/demo83/vault --runner fake:tests
 | 4 段原文含空格或英文：`to` 取自原文、保留空格，且 `norm(to)` 是 `norm(段)` 的子串 | `::test_the_replacement_keeps_the_spaces_and_latin_letters_of_the_transcript`（段是「这个名字变成 middle name 就是外国人的叫法。」） |
 | 4 有逐字命中时不归一（`quotes_snapped` 为 0） | `::test_a_verbatim_quote_is_never_snapped` |
 | 4 归一后 `ts` 越界 → 只计 `quotes_out_of_range`、不计 `quotes_snapped`、不写回 | `::test_a_snapped_quote_that_is_out_of_range_is_only_counted_as_out_of_range` |
-| 5 `gates.json` 每话题有 `quotes_snapped` 与 `snapped`，0 条时 `snapped == []`；块首行与日志行的四个数和 `gates.json` 合计一致 | `test_s3_gates.py::test_a_clean_episode_passes_every_gate`（整份 entry 逐键比）、`test_sm_render_ep.py::test_the_block_head_reports_what_the_gates_dropped_and_snapped`、上面验收 1 / 2 两条（块首行与 `gates.json` 同一趟比） |
+| 5 `gates.json` 每话题有 `quotes_snapped` 与 `snapped`，0 条时 `snapped == []`；块首行与日志行的四个数和 `gates.json` 合计一致 | `test_s3_gates.py::test_a_clean_episode_passes_every_gate`（整份 entry 逐键比）、`test_sm_render_ep.py::test_the_block_head_reports_what_the_gates_dropped_and_snapped`、`test_s3_gates.py::test_the_log_line_reports_the_same_four_numbers_as_gates_json`（评审补：`snap` / `bad` 两份片段各跑一趟，日志行、块首行、`gates.json` 合计三处逐数比） |
 | 6 幂等：归一过一轮再跑，`quotes_snapped == 0`、`snapped == []`、片段逐字节不变、块首行「归一引文 0 条」 | `test_s3_gates.py::test_a_snapped_episode_run_twice_snaps_nothing_the_second_time`（整条 `ep` 链路）、`test_sm_l3.py::test_running_twice_changes_nothing`（连 mtime 都不动） |
 
 票面之外顺手钉住的：`norm_map` 与 `norm` 归的是同一个文本、下标表指得回原文
