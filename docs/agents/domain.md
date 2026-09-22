@@ -55,6 +55,7 @@
 │   │   ├── transcript.py                       §5.1 正本 → §5.2 喂模型的文本
 │   │   ├── runner.py / pairs.py / prov.py      无头调用三形态 / 三份留档与 _failed/ / provenance
 │   │   ├── l1.py / l2.py                       L1 章节表 / L2 逐章节整理（检查、归一、并发）
+│   │   ├── l3.py                               L3 闸门：引文逐字、时间戳范围、ASR 条目、gates.json
 │   │   └── render_ep.py                        整理稿标记块渲染与写回（§5.7）
 │   ├── worker.ps1                      ← 阶段 0 执行器 + -Extract / -Name 等人触发入口
 │   └── test.sh                         ← Offline test entry used by AFK and humans
