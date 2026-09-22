@@ -1,10 +1,17 @@
 # -*- coding: utf-8 -*-
 """L3 闸门（纯代码）：片段 → 过滤后的片段 + `gates.json`（SPEC §4 L3、§5.4）。
 
-**只删、只警、只补 `quotes[].ctx`，一个字都不改**（红线 2、5）。本层跑三道：
+**只删、只警、只补 `ctx`、只把近似命中的 `quotes[].text` 换成逐字稿原文**（红线
+2、5）。本层跑三道：
 
-- 闸门 1 引文逐字命中：`norm(quotes[].text)` 是逐字稿**某一段** `norm(text)` 的
-  子串（不跨段）。命中的补 `ctx`（该段全文），不命中的整条删掉并计数。
+- 闸门 1 引文逐字命中，三档，顺序固定：`norm(quotes[].text)` 是逐字稿**某一段**
+  `norm(text)` 的子串（不跨段）→ 留，补 `ctx`（该段全文）；逐字对不上但跟 `ts`
+  前后 2 分钟内某一段的某个跨度只差一两个字（半全局编辑距离 ≤
+  `max(1, 字数 // 10)`、引文 ≥ `SNAP_MIN_LEN` 字）→ 把 `text` 换成该跨度在原文里
+  的那一截、补 `ctx`、计 `quotes_snapped` 并把 `from` / `to` 记进 `snapped`（红线
+  9：不静默）；还对不上 → 整条删掉并计数。
+  归一只会把引文换成逐字稿里的原话，模型少抄或错抄一两个字不至于整条丢掉，丢掉
+  的限定词随原句一起回来（红线 2）。
 - 闸门 2 时间戳在范围内：`quotes[].ts` 与 `paras` 行首的时刻落在话题
   `[start, end)` 前后各 2 分钟内；`paras` 的另须落在**所属章节**的 `[start, end)`
   内、不含余量——L2 的切片带前后各 2 分钟上下文，那里的内容归相邻章写（ADR 0005）。
@@ -32,12 +39,14 @@ from pathlib import Path
 
 from .l2 import FRAG_KEYS, KINDS, check_items, check_paras, json_bytes, write_json
 from .prov import now_iso
-from .text import norm, parse_hms
+from .text import norm, norm_map, parse_hms
 from .transcript import build_lines, read_transcript, slice_chapter
 
 PAD_S = 120            # 话题范围的余量、章节切片的余量（§4 L3 第 2 条、§5.2）
+SNAP_MIN_LEN = 6       # 短于这个字数（归一化后）的引文不归一：一字之差可能就是另一句话
+SNAP_EDITS_PER_10 = 1  # 每 10 字容许差几处，下限 1：超出一两个字就分不清模型指的是哪句
 PARA_TS_RE = re.compile(r"^\[(\d{1,2}:[0-5]\d:[0-5]\d)\]")
-COUNTERS = ("quotes_dropped", "quotes_out_of_range", "asr_dropped")
+COUNTERS = ("quotes_snapped", "quotes_dropped", "quotes_out_of_range", "asr_dropped")
 
 
 @dataclass
@@ -121,6 +130,83 @@ def hit_segment(ntext: str, ts: int | None, nsegs: list[tuple[str, dict]]) -> di
     return min(hits, key=lambda s: abs(float(s.get("start") or 0) - ts))
 
 
+def align_span(nquote: str, nseg: str) -> tuple[int, int, int]:
+    """引文整体对齐进段内某个跨度：(编辑距离, 起, 止)，下标落在 `nseg` 上。
+
+    半全局编辑距离——插 / 删 / 换各记 1，跨度**两端不要钱**（引文本来就只是段里
+    的一截）。同距离取最短跨度、再同取最靠前的跨度：模型末尾多抄一个字而逐字稿
+    那处紧跟标点时，两种对法距离都是 1，取短的那个才不会把标点也算成他说的话。
+
+    逐格 DP：候选段 `norm` 后几百字、引文几十字，一条引文几万格，够快。
+    """
+    m, n = len(nquote), len(nseg)
+    # 行 0：从哪个位置起对齐都不要钱，所以距离全 0、起点就是当前位置
+    dist, start = [0] * (n + 1), list(range(n + 1))
+    for k in range(1, m + 1):
+        # 第 k 行的第 0 列：引文的前 k 个字对空跨度，只能全删
+        cur_d, cur_s = [k], [0]
+        qc = nquote[k - 1]
+        for j in range(1, n + 1):
+            # 每格取 (距离, 起点靠后)最优的一条路：距离一样时起点越靠后跨度越短，
+            # 而往后的代价跟起点无关，所以这么挑不会错过全局最优
+            best = (dist[j] + 1, -start[j])                              # 删引文里这个字
+            ins = (cur_d[j - 1] + 1, -cur_s[j - 1])                      # 插段里这个字
+            sub = (dist[j - 1] + (qc != nseg[j - 1]), -start[j - 1])     # 换 / 对上
+            if ins < best:
+                best = ins
+            if sub < best:
+                best = sub
+            cur_d.append(best[0])
+            cur_s.append(-best[1])
+        dist, start = cur_d, cur_s
+    d, _, i, j = min((dist[j], j - start[j], start[j], j) for j in range(n + 1))
+    return d, i, j
+
+
+def snap_segment(nquote: str, ts: int | None, nsegs: list[tuple[str, dict]],
+                 ) -> tuple[str, dict] | None:
+    """近似命中（闸门 1 第二档）：(该跨度在**原文**里的那一截, 那一段)。对不上返回
+    None——归一不产生失败态，对不上就交回去走「删」那一档。
+
+    候选段只取与 `[ts - 2 分钟, ts + 2 分钟]` 有交集的那些：`ts` 读不出来就没有尺子
+    定位，整集找「最像的一句」换错句比删更糟。
+    """
+    if ts is None or len(nquote) < SNAP_MIN_LEN:
+        return None
+    budget = max(1, len(nquote) * SNAP_EDITS_PER_10 // 10)
+    best = None
+    for nseg, seg in nsegs:
+        if not nseg or not near(seg, ts):
+            continue
+        # 引文比整段还长出预算之外：对齐进段内任何一个跨度都至少要差这么多刀，
+        # 不必逐格算。模型偶尔会把一整节抄成「引文」，没这一刀 DP 会按它的长度
+        # 乘段长空转一遍（2 万字的「引文」能让一集卡好几秒）
+        if len(nquote) - len(nseg) > budget:
+            continue
+        d, i, j = align_span(nquote, nseg)
+        if d > budget or j <= i:
+            continue
+        # 先距离、再跨度长短，最后才是离 `ts` 的远近：同一句话在窗里出现两遍时，
+        # `ctx` 要的是他说这一句的那一处（跟逐字命中那一档一个规矩）
+        key = (d, j - i, abs(float(seg.get("start") or 0) - ts))
+        if best is None or key < best[0]:
+            best = (key, seg, i, j)
+    if best is None:
+        return None
+    _, seg, i, j = best
+    raw = str(seg.get("text") or "")
+    _, idx = norm_map(raw)
+    # 跨度两端都落在留下来的字上，中间原文有的空格 / 英文 / 时间戳原样带回来
+    return raw[idx[i]:idx[j - 1] + 1], seg
+
+
+def near(seg: dict, ts: int) -> bool:
+    """这一段跟 `[ts - 2 分钟, ts + 2 分钟]` 有没有交集（归一档的候选段）。"""
+    s0 = float(seg.get("start") or 0)
+    s1 = float(seg.get("end") or 0)
+    return s0 <= ts + PAD_S and max(s0, s1) >= ts - PAD_S
+
+
 def in_topic(ts: int | None, start: int, end: int) -> bool:
     """话题范围前后各 2 分钟，两端都算在范围内（闸门 2）。
 
@@ -142,10 +228,12 @@ def gate_frag(frag: dict, chapter: dict, nsegs: list[tuple[str, dict]],
               nslice: list[str]) -> tuple[dict, dict]:
     """跑完三道闸门的 (片段, 这个话题在 `gates.json` 里的一行)。
 
-    片段是新对象：**只删条目、只补 `ctx`**，留下来的字符串值一个字节都不动。
+    片段是新对象：**只删条目、只补 `ctx`、只把近似命中的 `text` 换成逐字稿原文**，
+    留下来的字符串值除这一处外一个字节都不动，换成的也是逐字稿里的连续一截。
     """
-    entry = {"quotes_dropped": 0, "quotes_out_of_range": 0, "paras_out_of_range": [],
-             "asr_dropped": 0, "schema": check_shape(frag) or "ok"}
+    entry = {"quotes_snapped": 0, "quotes_dropped": 0, "quotes_out_of_range": 0,
+             "paras_out_of_range": [], "asr_dropped": 0, "snapped": [],
+             "schema": check_shape(frag) or "ok"}
     out = dict(frag)
     t0, t1 = parse_hms(frag.get("start")), parse_hms(frag.get("end"))
     c0, c1 = parse_hms(chapter.get("start")), parse_hms(chapter.get("end"))
@@ -159,16 +247,27 @@ def gate_frag(frag: dict, chapter: dict, nsegs: list[tuple[str, dict]],
                 entry["quotes_dropped"] += 1
                 continue
             ts = parse_hms(q.get("ts"))
-            seg = hit_segment(norm(q["text"]), ts, nsegs)
-            if seg is None:
-                entry["quotes_dropped"] += 1
-                continue
+            nquote = norm(q["text"])
+            snapped, seg = None, hit_segment(nquote, ts, nsegs)
+            if seg is None:                       # 逐字对不上，才试归一那一档
+                hit = snap_segment(nquote, ts, nsegs)
+                if hit is None:
+                    entry["quotes_dropped"] += 1
+                    continue
+                snapped, seg = hit
             # 话题的起止读不出来就不跑闸门 2：宁可不删（红线 2），schema 那一栏
             # 已经把这个片段报出来了
             if t0 is not None and t1 is not None and not in_topic(ts, t0, t1):
+                # 归一完照样越界的只计越界：`quotes_snapped` 只数真正留下来的
                 entry["quotes_out_of_range"] += 1
                 continue
-            kept.append(dict(q, ctx=str(seg.get("text") or "")))
+            if snapped is None:
+                kept.append(dict(q, ctx=str(seg.get("text") or "")))
+                continue
+            entry["quotes_snapped"] += 1
+            entry["snapped"].append({"ts": str(q.get("ts") or ""), "from": q["text"],
+                                     "to": snapped})
+            kept.append(dict(q, text=snapped, ctx=str(seg.get("text") or "")))
         out["quotes"] = kept
 
     if isinstance(frag.get("paras"), list) and None not in (t0, t1, c0, c1):
