@@ -45,7 +45,7 @@ L7  渲染（代码）：日报 + 事件笔记 + 对照表
 
 ## 环境
 
-双机：笔记本（Claude Code + Obsidian）↔ 房间 PC（RTX 5070，faster-whisper + CAM++，经 Tailscale+SSH）。全流程 LLM 走 Claude Code 订阅（Max），无头 `claude -p`；派子代理必须显式指定 model。
+双机：笔记本（Claude Code + Obsidian）↔ 房间 PC（RTX 5070，FireRedASR2-AED + CAM++，经 Tailscale+SSH）。全流程 LLM 走 Claude Code 订阅（Max），无头 `claude -p`；派子代理必须显式指定 model。
 
 ## 延伸阅读
 
