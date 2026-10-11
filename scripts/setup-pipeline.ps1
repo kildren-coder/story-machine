@@ -219,15 +219,19 @@ else {
     if ($LASTEXITCODE -ne 0) { throw "无法创建 E:\asr\staged" }
     Say "E:\asr\staged 就绪" Green
 
-    # redecode.py 是 smpc.py 的 import，少传一个 smpc.py 连 download 都起不来
-    foreach ($f in 'smpc.py', 'redecode.py') {
+    # asrblocks.py 是 smpc.py 的 import，少传一个 smpc.py 连 download 都起不来；
+    # fired_engine.py 是 transcribe 的引擎接线
+    foreach ($f in 'smpc.py', 'asrblocks.py', 'fired_engine.py') {
         & scp -q (Join-Path $Repo "pc\$f") "${Host5070}:C:/asr/$f"
         if ($LASTEXITCODE -ne 0) { throw "$f 上传失败" }
         Say "C:\asr\$f 已更新" Green
     }
+    # 吞块补解随换引擎撤掉（ADR 0006）
+    & ssh $Host5070 "Remove-Item -Force -ErrorAction SilentlyContinue C:\asr\redecode.py" 2>&1 | Out-Null
 
-    $ver = & ssh $Host5070 "C:\asr\venv\Scripts\python.exe -c `"import faster_whisper,sys;print('fw',faster_whisper.__version__)`"" 2>&1
-    Say "转写环境：$ver" Green
+    # 转写环境由 pc\setup_fired.ps1 一次性装好（E:\asr\venv-fired）；这里只报它在不在
+    $ver = & ssh $Host5070 "if (Test-Path E:\asr\venv-fired\Scripts\python.exe) { E:\asr\venv-fired\Scripts\python.exe -c `"import torch;print('torch',torch.__version__)`" } else { 'venv-fired MISSING (run pc\setup_fired.ps1)' }" 2>&1
+    Say "转写环境：$ver" $(if ("$ver" -match 'MISSING') { 'Red' } else { 'Green' })
     $yt = & ssh $Host5070 "if (Test-Path C:\asr\venv\Scripts\yt-dlp.exe) { 'yt-dlp ok' } else { 'yt-dlp MISSING' }" 2>&1
     Say "下载工具：$yt" $(if ("$yt" -match 'MISSING') { 'Red' } else { 'Green' })
 }

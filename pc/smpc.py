@@ -3,7 +3,11 @@
 
 子命令：
     download   --ep EPxx --url <链接>     yt-dlp 抓音频流 → 暂存区 EPxx.m4a + EPxx.meta.json
-    transcribe --ep EPxx                  faster-whisper 转写 → EPxx.transcript.json
+    transcribe --ep EPxx                  FireRedASR2-AED 转写 → EPxx.transcript.json + EPxx.words.json
+
+两个子命令跑在不同 venv：download / meta 用 C:\\asr\\venv（yt-dlp 在那里，无 torch），
+transcribe 用 E:\\asr\\venv-fired（torch CUDA 版）。所以本文件顶层只 import 标准库和
+asrblocks（纯标准库）；引擎接线 fired_engine 在 transcribe 里才 import。
 
 调用契约（笔记本侧的 worker.ps1 依赖，改动前先看这几条）：
 
@@ -17,21 +21,22 @@
 3. **产物一律落 E:\\asr\\staged\\，且文件名一律 EPxx.***。scp 只搬 ASCII 名。
 
 红线相关：本脚本只做听写，不做任何摘要、改写、纠错。转写配置是 SPEC §4 阶段0
-冻结的那一套（large-v3 / float16 / batched bs16 / VAD 开 / word_timestamps / zh），
-不要在这里"调优"。唯一的后处理是繁→简逐字归一（见 to_simplified 的注释），它不碰
-解码参数、不改词，只统一字形。
+冻结的那一套（FireRedASR2-AED / fp32 / beam 3 / batch 4 / VAD 30 秒块 / CTC 词时刻，
+常量在 asrblocks.py 顶上），不要在这里"调优"。后处理只有两样：繁→简逐字归一（见
+to_simplified 的注释），只统一字形；FireRedPunc 加的标点另存在顶层 `punc`，正本
+`segments[].text` 不带标点。
 """
 
 import argparse
 import json
-import os
 import pathlib
 import re
+import shutil
 import subprocess
 import sys
 import time
 
-import redecode          # 同目录，纯标准库；缺了要当场炸，别等转写完才发现补解没上
+import asrblocks         # 同目录，纯标准库；缺了要当场炸，别等转写完才发现
 
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
@@ -39,13 +44,6 @@ AUDIO_DIR = pathlib.Path(r"E:\asr\audio")
 STAGE_DIR = pathlib.Path(r"E:\asr\staged")
 VENV_BIN = pathlib.Path(r"C:\asr\venv\Scripts")
 COOKIES = pathlib.Path(r"E:\asr\bili-cookies.txt")
-HOTWORDS = pathlib.Path(r"E:\asr\hotwords.json")
-
-# faster-whisper 源码实证的静默截断上限（max_length // 2 - 1），超出无告警丢弃。见 SPEC §4 阶段0。
-HOTWORDS_TOKEN_LIMIT = 223
-
-SR = 16000                  # faster-whisper 的工作采样率
-VAD_MIN_SILENCE_MS = 160    # 复算块时要跟 batched 管线同一套 VAD 参数
 
 
 def out(kind, *parts):
@@ -192,17 +190,6 @@ def cmd_download(ep, url):
 # transcribe
 # --------------------------------------------------------------------------
 
-def setup_cuda_dlls():
-    base = pathlib.Path(r"C:\asr\venv\Lib\site-packages\nvidia")
-    for sub in ("cublas", "cudnn", "cuda_nvrtc"):
-        p = base / sub / "bin"
-        if p.exists():
-            os.add_dll_directory(str(p))
-            os.environ["PATH"] = str(p) + os.pathsep + os.environ["PATH"]
-    # hf-mirror 端点会让 local_files_only 之外的路径走错，转写一律用本地权重
-    os.environ.pop("HF_ENDPOINT", None)
-
-
 _T2S = None
 _T2S_CHAR = {}
 
@@ -220,9 +207,9 @@ def load_t2s():
 
 
 def to_simplified(text):
-    """繁体字形归一成简体。
+    """繁体字形归一成简体。不分引擎，段文本和词片段一律过这一张表。
 
-    Whisper 的中文词表里 `這` 和 `这` 是两个不同的 token，没有独立的字形选择
+    起因在旧引擎 whisper：它的中文词表里 `這` 和 `这` 是两个不同的 token，没有独立的字形选择
     环节。训练语料中台港来源的音频配的是繁体字幕、大陆来源的配简体，于是模型
     把「听起来像哪边的人」学成了字形先验：同一场直播，主播出简体、台湾口音的
     嘉宾出繁体（EP02 实测嘉宾 72.8% 繁）。已验证与用词无关（他自己的繁体段和
@@ -248,105 +235,16 @@ def to_simplified(text):
     return "".join(buf)
 
 
-def load_hotwords(model):
-    """读 hotwords.json（多字词列表）。超 223 token 上限时截断并告警，绝不静默丢弃。"""
-    if not HOTWORDS.exists():
-        return None
-    try:
-        words = json.loads(HOTWORDS.read_text(encoding="utf-8"))
-    except Exception as e:
-        info("hotwords.json unreadable, skipping: %r" % (e,))
-        return None
-    if isinstance(words, dict):
-        words = words.get("words") or []
-    words = [str(w).strip() for w in words if str(w).strip()]
-    if not words:
-        return None
-
-    def ntok(text):
-        try:
-            return len(model.hf_tokenizer.encode(text).ids)
-        except Exception:
-            return len(text)  # 保守估计：按字符数算，只会更早触发截断
-
-    kept, text = [], ""
-    for w in words:
-        cand = (text + " " + w).strip()
-        if ntok(cand) > HOTWORDS_TOKEN_LIMIT:
-            info("HOTWORDS TRUNCATED: kept %d/%d words (223-token limit)"
-                 % (len(kept), len(words)))
-            break
-        kept, text = kept + [w], cand
-    info("hotwords: %d words, %d tokens" % (len(kept), ntok(text)))
-    return text or None
-
-
 def ascii_only(text):
     """worker 的行协议只认 ASCII（本文件头第 2 条）。异常消息不一定是。"""
     return str(text).encode("ascii", "replace").decode("ascii")
 
 
-def redecode_pass(pipe, pcm_path, kw, segments, words_side, total_s):
-    """吞块补解（SPEC §4 阶段 0）：疑似被吞的块换个切法再听一遍。
-
-    在第一遍收完段之后、写盘之前做——正本一写盘就永久不可变，不回补。
-    返回 (segments, words_side, 报告)。**这一步失败绝不让转写失败**：报告标
-    skipped、日志报原因，正本照常写盘。
-
-    所以这里兜一个 except Exception：补解跑在写盘之前，从这里漏出去的异常会让几个
-    小时的转写一个字都落不了盘——比不补严重得多。
-    """
-    t0 = time.time()
-    try:
-        segs, words, rep = _redecode(pipe, pcm_path, kw, segments, words_side, total_s)
-        # 段、词、报告都要进正本：序列化不了就等于整步失败，在这里失败而不是写盘时——
-        # 真机上 faster-whisper 的时刻是 numpy 标量，规则层漏一个 numpy bool 出来就是这一下
-        json.dumps([segs, words, rep])
-    except Exception as e:
-        segs, words, rep = segments, words_side, redecode.skipped(
-            "redecode failed: %r" % (e,), segments)
-    rep["elapsed_s"] = round(time.time() - t0, 1)
-    return segs, words, rep
-
-
-def _redecode(pipe, pcm_path, kw, segments, words_side, total_s):
-    try:
-        from faster_whisper.audio import decode_audio
-        from faster_whisper.vad import VadOptions, get_speech_timestamps
-        # 管线内部不把块交出来，只能拿同一套 VAD 参数复算一遍。合块条件在
-        # redecode.group_chunks 里，照抄 vad.collect_chunks（它自己的 segments
-        # 元数据不能用：每开一个新块都会漏记该块的第一段）。
-        pcm = decode_audio(str(pcm_path), sampling_rate=SR)
-        vad = VadOptions(max_speech_duration_s=redecode.MAX_CHUNK_SPEECH_S,
-                         min_silence_duration_ms=VAD_MIN_SILENCE_MS)
-        speech = [[t["start"] / SR, t["end"] / SR]
-                  for t in get_speech_timestamps(pcm, vad)]
-        chunks = redecode.group_chunks(speech)
-    except Exception as e:
-        return segments, words_side, redecode.skipped(
-            "vad recompute failed: %r" % (e,), segments)
-
-    info("redecode: chunks=%d segments=%d" % (len(chunks), len(segments)))
-
-    def decode(k, start, end, length):
-        """把块 k 的原始时间跨度单独拿出来重解一遍：冻结配置只改 chunk_length。"""
-        pipe.last_speech_timestamp = 0     # 不清零的话上一次调用的尾巴会拖进这一块
-        segs, _ = pipe.transcribe(pcm[int(start * SR):int(end * SR)],
-                                  **dict(kw, chunk_length=length))
-        out_segs, out_words = [], []
-        for s in segs:                     # 时间加块起点；文本和词过同一张 t2s 字表
-            out_segs.append({"start": round(s.start + start, 2),
-                             "end": round(s.end + start, 2),
-                             "text": to_simplified(s.text)})
-            out_words.append([[round(w.start + start, 2), round(w.end + start, 2),
-                               to_simplified(w.word)] for w in (s.words or [])])
-        return out_segs, out_words
-
-    def progress(done, total, chunk):
-        # 单位跟第一遍一样是秒：进度条会退回去再爬一遍音频，那正是这一步在干的事
-        out("PROGRESS", "%.1f" % chunk["end"], "%.1f" % total_s)
-
-    return redecode.run(chunks, segments, words_side, decode, progress)
+def _plain(o):
+    """写盘的兜底：漏进产物的 numpy 标量收成内建类型，别让几小时的转写在写盘那一下炸掉。"""
+    if hasattr(o, "item"):
+        return o.item()
+    raise TypeError("not JSON serializable: %r" % (o,))
 
 
 def cmd_transcribe(ep):
@@ -359,85 +257,90 @@ def cmd_transcribe(ep):
     info("audio=" + audio.name)
 
     load_t2s()          # 依赖缺失就在这里炸，别转写完了才发现写不出简体
-    setup_cuda_dlls()
-    from faster_whisper import WhisperModel, BatchedInferencePipeline
-
     t0 = time.time()
-    model = WhisperModel("large-v3", device="cuda", compute_type="float16",
-                         local_files_only=True)
-    pipe = BatchedInferencePipeline(model=model)
+    try:
+        import fired_engine
+        eng = fired_engine.Engine()
+    except Exception as e:
+        fail("model load failed: " + ascii_only(repr(e)))
     t_load = time.time() - t0
-    info("model loaded in %.1fs" % t_load)
+    info("model loaded in %.1fs (%s %s, %s)"
+         % (t_load, asrblocks.ENGINE, asrblocks.CONFIG, eng.versions))
 
-    hotwords = load_hotwords(model)
+    # 块音频照实验的喂法写成 wav，转完删掉
+    blocks_dir = STAGE_DIR / (ep + ".blocks")
+    shutil.rmtree(blocks_dir, ignore_errors=True)
+    try:
+        t0 = time.time()
+        try:
+            pcm, blocks = fired_engine.vad_blocks(audio)
+            wavs = fired_engine.write_block_wavs(pcm, blocks, blocks_dir)
+        except Exception as e:
+            fail("vad failed: " + ascii_only(repr(e)))
+        total = len(pcm) / asrblocks.SR
+        del pcm
+        t_vad = time.time() - t0
+        info("vad: blocks=%d span=%.0fs of %.0fs in %.0fs"
+             % (len(blocks), sum(asrblocks.span(b) for b in blocks), total, t_vad))
 
-    kw = dict(language="zh", vad_filter=True, word_timestamps=True, batch_size=16)
-    if hotwords:
-        kw["hotwords"] = hotwords
+        t0 = time.time()
+        segments, words_side, asr = asrblocks.run(
+            blocks, eng.decoder(wavs), t2s=to_simplified,
+            # 单位是秒：已解块的音频秒数 / 全部块的音频秒数
+            progress=lambda done, all_s: out("PROGRESS", "%.1f" % done, "%.1f" % all_s),
+            log=lambda msg: info(ascii_only(msg)))
+        t_run = time.time() - t0
+    finally:
+        shutil.rmtree(blocks_dir, ignore_errors=True)
 
+    asr.update(eng.memory())
+    n_t2s = asr.pop("t2s_chars")
+    info(asrblocks.asr_line(asr)
+         + " retried=%d in %.0fs (%.1fx realtime) peak=%.1fGB reserved=%.1fGB"
+         % (asr["retried"], t_run, total / t_run if t_run else 0,
+            asr["peak_gpu_gb"], asr["reserved_gpu_gb"]))
+    for key in ("error_blocks", "linear_blocks"):
+        if asr[key]:
+            info("asr: %s k=%s" % (key, ",".join(str(k) for k in asr[key])))
+
+    # 标点另存：正本 segments[].text 不带标点；这一步失败不让转写失败
     t0 = time.time()
-    segs, meta = pipe.transcribe(str(audio), **kw)
-    total = float(meta.duration or 0)
-
-    segments, words_side = [], []
-    last_tick = 0.0
-    n_t2s = 0
-    for s in segs:
-        text = to_simplified(s.text)
-        n_t2s += sum(1 for a, b in zip(s.text, text) if a != b)
-        segments.append({
-            "start": round(s.start, 2),
-            "end": round(s.end, 2),
-            "speaker": None,          # 说话人分离未跑；槽位留着，补跑时原地填
-            "text": text,
-        })
-        if s.words:
-            words_side.append([[round(w.start, 2), round(w.end, 2), to_simplified(w.word)]
-                               for w in s.words])
-        else:
-            words_side.append([])
-        if s.end - last_tick >= 30:
-            last_tick = s.end
-            out("PROGRESS", "%.1f" % s.end, "%.1f" % total)
-    t_run = time.time() - t0
-
-    segments, words_side, red = redecode_pass(pipe, audio, kw, segments, words_side, total)
+    punc = asrblocks.punc_pass(segments, eng.punc)
+    punc["elapsed_s"] = round(time.time() - t0, 1)
+    if punc["skipped"]:
+        info("punc: skipped (%s)" % ascii_only(punc["skipped"]))
+    else:
+        info("punc: segments=%d unmatched=%d in %.1fs"
+             % (len(punc["segments"]), punc["unmatched"], punc["elapsed_s"]))
 
     doc = {
         "ep": ep,
         "audio": audio.name,
         "duration_s": round(total, 1),
-        "engine": "faster-whisper large-v3",
-        "config": "float16 batched bs16 vad word_ts zh"
-                  + (" hotwords" if hotwords else "")
-                  + ("" if red["skipped"] else " redecode"),
+        "engine": asrblocks.ENGINE,
+        "config": asrblocks.CONFIG,
         "diarization": "pending",     # 显式标记：不是忘了，是这一步还没跑
         "orthography": "opencc t2s 逐字",   # 缺这个字段 = 这一集早于字形归一，别信它的字形
         "orthography_chars": n_t2s,
         "transcribed_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
         "load_s": round(t_load, 1),
+        "vad_s": round(t_vad, 1),
         "transcribe_s": round(t_run, 1),
         "realtime_factor": round(total / t_run, 1) if t_run else None,
-        "redecode": red,
+        "asr": asr,
+        "punc": punc,
         "segments": segments,
     }
     dest = STAGE_DIR / (ep + ".transcript.json")
-    dest.write_text(json.dumps(doc, ensure_ascii=False, indent=1), encoding="utf-8")
+    dest.write_text(json.dumps(doc, ensure_ascii=False, indent=1, default=_plain), encoding="utf-8")
 
     # 词时间戳留在 PC 侧：说话人分离要靠它在切换点拆段，
     # 存着就不必为了补跑分离而重转一遍。不进 vault（体积大且非面向人）。
     (STAGE_DIR / (ep + ".words.json")).write_text(
-        json.dumps({"ep": ep, "segments": words_side}, ensure_ascii=False),
+        json.dumps({"ep": ep, "segments": words_side}, ensure_ascii=False, default=_plain),
         encoding="utf-8")
 
-    if red["skipped"]:
-        info("redecode: skipped (%s)" % ascii_only(red["skipped"]))
-    else:
-        info("redecode: suspects=%d replaced=%d residual=%d errors=%d han=%d->%d in %.0fs"
-             % (red["suspects"], red["replaced"], red["residual"], red["errors"],
-                red["han_before"], red["han_after"], red["elapsed_s"] or 0))
-    info("segments=%d  %.1fmin in %.0fs (%.1fx realtime)  t2s=%d chars"
-         % (len(segments), total / 60, t_run, total / t_run if t_run else 0, n_t2s))
+    info("segments=%d  %.1fmin  t2s=%d chars" % (len(segments), total / 60, n_t2s))
     out("PROGRESS", "%.1f" % total, "%.1f" % total)
 
 
