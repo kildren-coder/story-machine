@@ -37,6 +37,7 @@ Later findings go into the existing ADR as dated additions under **Consequences*
 - [0003. 日报取代断言表](0003-日报取代断言表.md) — 产物从断言表改成按事件读的日报；每日人工审核闸门取消，人只在周末确认；被删掉的「判真假」层以受约束的形式回归。
 - [0004. 分层无头流水线](0004-分层无头流水线.md) — 一层一个无头调用，前一层输出是后一层输入；每层单独定 model 与 effort；机械闸门在代码里，不让模型自己核对。
 - [0005. L1 只切章节，话题交给 L2；位置用行号，形状交给 CLI](0005-L1切章节-L2切话题.md) — 整集一次切到话题，话题数同一集能差一倍多（EP02：29–75），L2 的调用次数跟着摆；改成 L1 切十几分钟一章的容器、章数由时长定，模型用行号指位置，产物形状经 `--json-schema` 交给 CLI 把关。
+- [0006. 转写引擎换 FireRedASR2-AED](0006-转写引擎换FireRed.md) — 盲听推翻了 9 月「按上下文判 whisper 更准」：whisper 写得通顺但不是原话（30 处 FireRed 对 21、whisper 对 8）；首测 1.2× 是显存溢出，K/V 缓存 + 显存上限后 fp32 24× 且逐字不变；英文变差，交给下游。
 
 Existing high-level rationales live in CONTEXT.md; ADRs capture deeper design choices.
 

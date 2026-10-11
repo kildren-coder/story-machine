@@ -95,25 +95,40 @@ L7      渲染      纯代码 ──► 日报 + 事件笔记 + 跨 UP 对照
 
 ### 阶段 0：转写（PC）
 
-**转写**：`faster-whisper` `large-v3`，`float16` / `batch_size=16` / VAD 开 / `word_timestamps=True` / `language="zh"`；`multilingual` 不开；`initial_prompt` 不用。此配置冻结，唯一的例外是下面的吞块补解：它只改 `chunk_length`，而且只作用于判出来的块。环境：CUDA 12.8+，CTranslate2 ≥ 4.7.0。
+**转写**（`smpc.py transcribe`，venv `E:\asr\venv-fired`，torch CUDA 版、cu128 以上）：FireRedASR2-AED（ADR 0006），权重在 `E:\asr\models\FireRedASR2-AED`，代码是固定版本的 FireRedASR2S 源码。此配置冻结。
+- **切块**：
+  - VAD 用 `faster_whisper.vad.get_speech_timestamps`，参数 `VadOptions(max_speech_duration_s=30, min_silence_duration_ms=160)`。
+  - 合块条件照抄 `vad.collect_chunks`：累计语音超过 30 秒就另起一块。
+  - 每块取原始时间跨度 `[首段 start, 末段 end)`，含块内静音，整段以 16 kHz 单声道送入。
+- **解码**：
+  - fp32，不开半精度。
+  - `beam_size=3`、`nbest=1`、`softmax_smoothing=1.25`、`aed_length_penalty=0.6`、`eos_penalty=1.0`、`decode_max_len=0`、`return_timestamp=True`。
+  - batch 4，块按时长排序后分批。
+  - 不接外部语言模型，不用热词、不用上下文提示。
+- **两处工程修补**：都不改数学。升级 FireRedASR2S 后，必须重验「修补前后 fp32 逐字相同」。
+  - 交叉注意力对编码器输出的 K/V 投影，整个束搜索只算一次。实现方式是套在 `DecoderMultiHeadAttention.forward` 外面。
+  - 调 `torch.cuda.set_per_process_memory_fraction(0.8)`，每批之后调 `torch.cuda.empty_cache()`。
+- **段**：一块一段。`start` / `end` 取块的时间跨度，`text` 是该块的解码输出。
+  - 解码为空的块不出段，计入 `asr.empty`。
+  - 一批里缺了某块的结果时，该块单独重解一次；仍然没有结果的不出段，计入 `asr.errors`，日志报块号。
+- **词**：
+  - 时刻用 CTC 强制对齐的 `[token, start, end]`，块内秒加块起点换成绝对秒。
+  - 按顺序挂回段文本，每个单元带上紧随其后的空格，保证 `"".join(词) == 段文本`。
+  - 挂不上的块，整块按字均分时刻，计入 `asr.words_linear`，日志报块号。
+- **产物字段**（`transcript.json` 顶层）：
+  - `engine: "FireRedASR2-AED"`；
+  - `config: "fp32 beam3 bs4 xkv memfrac0.8 vad30 ctc_ts"`；
+  - `asr`：块数、`empty` / `errors` / `words_linear`、显存峰值与保留（GB）；
+  - `punc`：见下。
 
-**吞块补解**（`smpc.py transcribe` 内，转写之后、写盘之前；规则层 `pc/redecode.py`，纯标准库，`--demo <样例>` 拿假解码表跑一遍）：batched 管线把 VAD 语音拼成 ≤ 30 秒的块，每块只解一遍，没有降温重试。长块会被整块吞掉，只剩块头或块尾几秒。EP02 实测正本少了约 6% 的汉字（#79、#80）。补解就是把同一段音频换个切法再听一遍：不用 LLM，不改写别的块。
-- **块**：用管线同一套 VAD 参数（`max_speech_duration_s=30`、`min_silence_duration_ms=160`）复算语音块，合块条件照抄 `vad.collect_chunks`（累计语音超过 30 秒就另起一块），块 k 对应第一遍的第 k 段。段数与块数对不上、或复算失败时，整步跳过，并在日志里报原因；补解失败不让转写失败。
-- **疑似吞块**：块的语音时长 ≥ 8 秒，且满足以下任一条：
-  - 汉字数 / 语音秒 < 3；
-  - 块内空洞 ≥ 5 秒。块内空洞 = 相邻两词之间夹着的 VAD 语音秒数，取最大；块首到第一个词、最后一个词到块尾也算。
-- **重解阶梯**：把块的原始时间跨度单独拿出来，冻结配置只改 `chunk_length`，依次按 15 → 10 → 7 秒各解一版，解出的文本同样逐字 t2s。每解完一级：
-  - 从原文和已解各版中取汉字最多的一版；
-  - 取中的版本不再是疑似吞块就停，否则进下一级。
-  - 某一级解码抛异常：记下来，进下一级。
-- **可参选的版本**：原文，以及同时满足以下三条的解码版：
-  - 比原文多 ≥ 20 个汉字；
-  - 原文汉字 ≥ 80% 按顺序出现在新版里；
-  - 不复读（同一个 4 字汉字串出现不超过 5 次）。
+  日志一行 ASCII 报同样的计数与耗时。
 
-  取中的版本替换这一段的文本、词与起止时刻（时刻取那一级的首段 `start` 与末段 `end`）。替换后仍满足「词拼起来 = 段文本」，因为说话人分离按词重建段；对不上的解码版按这一级失败处理。
-- **残留**：阶梯走完仍是疑似吞块的块，不再重试，保留当时取中的版本；记进产物，并在日志里报条数，不静默。
-- **产物**：`transcript.json` 顶层加 `redecode`，记规则参数、疑似 / 替换 / 残留 / 错误的条数、补解前后的全集汉字数，以及每个疑似块：起止时间，各级的汉字数、空洞、复读次数和不参选的原因或错误，取中哪一级，是否残留。真跑过才给 `config` 追加 ` redecode`。日志一行 ASCII 报同样的计数与耗时。已转写的集不回补（正本不可变），要补由人决定重转。
+**标点**（同一进程，转写之后）：
+- FireRedPunc 给每段 `text` 加标点，权重在 `E:\asr\models\FireRedPunc`。
+- 结果只取标点：按位置插回该段原文，大小写与字一律以原文为准。
+- 存进 `transcript.json` 顶层 `punc: {model, segments: [{start, end, text}]}`，与分离前的段一一对应，去掉标点后与对应段逐字相同。
+- 正本 `segments[].text` 不带标点。
+- 标点这一步失败不让转写失败：`punc` 记 `skipped` 与原因。
 
 **说话人分离**（`pc/smdiar.py`，venv `C:\asr\venv-diar`，torch CPU）：
 - 模型 3D-Speaker `iic/speech_campplus_sv_zh_en_16k-common_advanced`，权重缓存 `E:\asr\ms-cache`。禁用 `pyannote.audio` 4.x。
@@ -125,7 +140,7 @@ L7      渲染      纯代码 ──► 日报 + 事件笔记 + 跨 UP 对照
 
 **字形归一**：写盘时按 opencc `t2s` 逐字表繁转简，`transcript.json` / `words.json` 同步，`orthography` 字段记录。禁用 `tw2sp` 等词汇转换表。存量用 `pc/t2s_backfill.py`。
 
-**输出**：JSON 正本 `{start, end, speaker, text}`，浮点秒，永久不可变；`EP{n}.txt` 派生渲染。英文词（人名、机构名、术语）照原文写，或写成通行的中文译名，都算对，不强求统一。算错的只有一种：把英文写成没有意义的同音汉字，那是 ASR 生音。
+**输出**：JSON 正本 `{start, end, speaker, text}`，浮点秒，永久不可变；`EP{n}.txt` 派生渲染。英文词（人名、机构名、术语）照原文写，或写成通行的中文译名，都算对，不强求统一。算错的只有一种：把英文写成没有意义的同音汉字，那是 ASR 生音。FireRed 的英文输出一律小写。
 
 **声纹库与点名**（`pc/speakers.py`，`_assets/speakers.json`）：
 - 每集质心与库比对，门槛 0.65；库存每集样本，每人 ≤ 20 集按时长取长的，质心随取随算。
@@ -134,7 +149,7 @@ L7      渲染      纯代码 ──► 日报 + 事件笔记 + 跨 UP 对照
 - 撞脸报警：库内两两相似度 > `LIB_WARN = 0.50` 报出；worker 日志每对只报一次，EP 笔记只报与本集有关的对，库健康时不写。
 - 字段：`人物:` 机器独占（含「未知N」）；`主播:` / `嘉宾:` 只在空着时替人填一次。
 
-**热词：不用。** faster-whisper 的 `hotwords` 进的是 `<|startofprev|>` 提示槽，与 `initial_prompt` 同一位置；batched 下每个 30 秒窗都在提示下整窗重解，EP02 实测改坏远多于改好、且会把说话人原话改写成热词写法（#79）。`E:\asr\hotwords.json` 保持不存在，`smpc.py` 里的 `load_hotwords` 文件缺席即空转。ASR 生音的兜底在下游：L2 逐话题记 `asr`（听成 → 应为），L5 核查时据此纠偏；正本不改。
+**ASR 生音的兜底在下游**：L2 逐话题记 `asr`（听成 → 应为），L5 核查时据此纠偏；正本不改。
 
 ### 4.1 各层通用约定
 
@@ -448,7 +463,7 @@ transcript: ../_assets/EP02.transcript.json
 逐字稿渲染: ../_assets/EP02.txt
 时长: 03:10:43
 来源: https://www.bilibili.com/video/BV1TcM96DEPB
-转写引擎: faster-whisper large-v3
+转写引擎: FireRedASR2-AED
 说话人分离: 3dspeaker-campp   # pending | 3dspeaker-campp
 整理: done                    # pending | running | done | failed
 整理版本: L2@0.1
@@ -461,7 +476,7 @@ transcript: ../_assets/EP02.transcript.json
 
 | 层 | 模型 | effort | 联网 |
 |---|---|---|---|
-| 阶段 0 | 本地 faster-whisper / CAM++ | — | 否 |
+| 阶段 0 | 本地 FireRedASR2-AED + FireRedPunc / CAM++ | — | 否 |
 | L1 骨架 | sonnet | low | 否 |
 | L2 逐章节整理 | sonnet | medium | 否 |
 | L3 闸门 | 纯代码 | — | — |
