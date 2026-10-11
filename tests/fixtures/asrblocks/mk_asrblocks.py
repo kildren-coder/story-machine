@@ -134,7 +134,7 @@ def main():
                     "words_linear": linear, "retried": len(BATCH_MISSING)},
         },
     }
-    OUT.write_text(json.dumps(doc, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
+    OUT.write_bytes((json.dumps(doc, ensure_ascii=False, indent=1) + "\n").encode("utf-8"))  # LF
     print("wrote", OUT.name, "blocks", n, "segments", n - empty, "empty", empty, "linear", linear)
 
 
