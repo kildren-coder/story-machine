@@ -39,9 +39,12 @@ $QueuePath = Join-Path $Vault "_pipeline\队列.md"
 $AssetsDir = Join-Path $Vault "_assets"
 $EpisodesDir = Join-Path $Vault "10-Episodes"
 $RemoteStage = "E:/asr/staged"
+# 下载与元数据用 C:\asr\venv（yt-dlp 在那里，无 torch）
 $RemotePy = "C:\asr\venv\Scripts\python.exe"
 $RemoteScript = "C:\asr\smpc.py"
-# 说话人分离要 torch，转写 venv 必须保持无 torch（SPEC 阶段0：独立 venv、纯 CPU）
+# 转写用 FireRedASR2-AED 的 venv（torch CUDA 版，ADR 0006）；同一个 smpc.py
+$RemoteAsrPy = "E:\asr\venv-fired\Scripts\python.exe"
+# 说话人分离另用一个 venv（torch CPU 版，SPEC 阶段0）
 $RemoteDiarPy = "C:\asr\venv-diar\Scripts\python.exe"
 $RemoteDiarScript = "C:\asr\smdiar.py"
 # 声纹比对在本机跑：质心随 EP{n}.diar.json 回来了，只要 numpy
@@ -366,7 +369,8 @@ function Step-Download {
 
 function Step-Transcribe {
     param($Row)
-    Invoke-Remote -RemoteArgs @('transcribe', '--ep', $Row.Fields['ep']) -Row $Row -Unit sec
+    Invoke-Remote -RemoteArgs @('transcribe', '--ep', $Row.Fields['ep']) -Row $Row -Unit sec `
+        -Py $RemoteAsrPy
     Write-Log "  ✓ 转写完成" Green
 }
 
