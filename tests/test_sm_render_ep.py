@@ -13,7 +13,8 @@ from sm.render_ep import render_digest, render_para
 
 VER = "L2-topic@9.9"
 NOW = "2026-03-12T23:10:00+08:00"
-ZERO = {"quotes_dropped": 0, "quotes_out_of_range": 0, "asr_dropped": 0}
+ZERO = {"quotes_snapped": 0, "quotes_dropped": 0, "quotes_out_of_range": 0,
+        "asr_dropped": 0}
 
 
 def topic(tid, kind, a, b, title=None) -> dict:
@@ -37,8 +38,8 @@ def test_every_topic_gets_a_seekable_heading_and_its_paragraphs():
     assert "### [00:03:30] 北港大桥收费方案\n\n[00:00:00] **阿桥**讲了 t1\n" in out
     assert out.count("### ") == 2
     assert out.startswith("## 整理稿\n\n> [!info] 本块由 L3 渲染（整理版本 L2-topic@9.9，"
-                          f"生成于 {NOW}）；闸门：删引文 0 条、越界 0 条、删 ASR 条目 0 条；"
-                          "重跑会覆盖，批注请写在块外。\n")
+                          f"生成于 {NOW}）；闸门：归一引文 0 条、删引文 0 条、越界 0 条、"
+                          "删 ASR 条目 0 条；重跑会覆盖，批注请写在块外。\n")
     assert "杂项未渲染" not in out and "旁白" not in out
 
 
@@ -60,13 +61,14 @@ def test_five_kinds_of_content_each_get_their_own_subsection():
     assert "**疑似 ASR 生音**\n\n- 听成「北岗大桥」→ 应为「北港大桥」\n" in out
 
 
-def test_the_block_head_reports_what_the_gates_dropped():
-    """issue #53：闸门删掉的引文在笔记上是看不见的，块首行不报数人就不知道这一集
-    删过东西——全 0 也照写。"""
+def test_the_block_head_reports_what_the_gates_dropped_and_snapped():
+    """issue #53、#83：闸门删掉的引文、换成逐字稿原句的引文在笔记上都是看不见的，
+    块首行不报数人就不知道这一集动过什么——全 0 也照写。"""
     out = render_digest([topic("t1", "talk", "00:00:00", "00:10:00")], {"t1": frag("t1")},
                         VER, NOW,
-                        {"quotes_dropped": 2, "quotes_out_of_range": 1, "asr_dropped": 3})
-    assert "闸门：删引文 2 条、越界 1 条、删 ASR 条目 3 条；" in out.splitlines()[2]
+                        {"quotes_snapped": 4, "quotes_dropped": 2,
+                         "quotes_out_of_range": 1, "asr_dropped": 3})
+    assert "闸门：归一引文 4 条、删引文 2 条、越界 1 条、删 ASR 条目 3 条；" in out.splitlines()[2]
 
 
 def test_an_empty_subsection_keeps_quiet():

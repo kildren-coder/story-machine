@@ -37,5 +37,20 @@ def norm(s: str) -> str:
     return WS_RE.sub("", s)
 
 
+def norm_map(s: str) -> tuple[str, list[int]]:
+    """`norm()` 的带索引版：返回 (归一化文本, 下标表)，`idx[i]` 是归一化文本第 i 个
+    字在原文里的下标。恒有 `norm_map(s)[0] == norm(s)`。
+
+    闸门 1 的归一档要把归一化文本上的一个跨度换回**原文**里的那一截（原文里的
+    空格、英文、时间戳原样带着，红线 2），所以得知道每个字是从哪儿来的。`norm()`
+    自己不动：它只回答「一不一样」，多数调用方用不上这张表。
+    """
+    s = str(s or "")
+    cut = {i for m in TS_RE.finditer(s) for i in range(*m.span())}
+    idx = [i for i, ch in enumerate(s)
+           if i not in cut and ch not in EXTRA_WS and not WS_RE.fullmatch(ch)]
+    return "".join(s[i] for i in idx), idx
+
+
 def sha8(b: bytes) -> str:
     return hashlib.sha256(b).hexdigest()[:8]

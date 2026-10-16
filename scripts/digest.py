@@ -172,7 +172,8 @@ def cmd_ep(args) -> int:
         f"逐字稿 {src} 字，压缩比 {ratio_of(wrote, src)} → "
         f"{paths.rel(paths.digest(ep) / 'topics.json')}")
     # L3 闸门在渲染之前：不逐字的引文、越界的时间戳、逐字稿里没有的 ASR 条目在这里
-    # 删掉，笔记渲染的是过滤后的片段。闸门只删只警（越界的段只记不删，红线 2），
+    # 删掉（差一两个字的引文换成逐字稿原句留下），笔记渲染的是过滤后的片段。
+    # 闸门只删只警只归一（越界的段只记不删，红线 2），
     # 不产生失败态——schema 与覆盖的失败态是 #54 的事
     try:
         report = run_gates(paths, ep, generated_at=now, log=lambda m: log(m))
@@ -184,7 +185,8 @@ def cmd_ep(args) -> int:
             f"里的产物坏了或缺了，看一眼再删，或者 --force 重跑 L2")
         return 2
     gates = report.totals
-    log(f"L3 闸门：删引文 {gates['quotes_dropped']} 条、越界 "
+    log(f"L3 闸门：归一引文 {gates['quotes_snapped']} 条、"
+        f"删引文 {gates['quotes_dropped']} 条、越界 "
         f"{gates['quotes_out_of_range']} 条、删 ASR 条目 {gates['asr_dropped']} 条，"
         f"越界段 {gates['paras_out_of_range']} 处 → "
         f"{paths.rel(paths.digest(ep) / 'gates.json')}")
