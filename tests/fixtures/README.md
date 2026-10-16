@@ -20,6 +20,7 @@
 | `l3/frag-market-01.snap.json` | 闸门 1 近似命中归一的五档：逐字命中 1 条、多抄一字 1 条（「一百个摊」）、丢限定词 1 条（「六月底是赶在」少了「应该」）、改写太多 1 条（「便宜两百一年两千四…」）、逐字稿里没有 1 条；`asr` 为空 | §4 L3 第 1 条 |
 | `raw/<EP 或日期>/<层>-<单元>.raw.json` | 假 `claude -p --output-format json` 信封；L1 / L2 带 `structured_output`（`--json-schema` 的形状），L4 的 `result` 是围栏 JSON | §4.1 |
 | `raw-bad/…` | 坏响应（多数只有 `result`）：L1 行号不在这一集里 + 缺 title；L2 闸门违规；L2 纯散文无 JSON；L2 正文只有字数预算的十分之一（`L2-market-short`，schema 合法故带 `structured_output`，L2 不为字数设闸门）；L4 引用不存在话题 + aside 成事件 | §4.1 |
+| `terms/河口夜话.md` | 按主播词表（`_pipeline/词表/<up>.md` 的样子）：「专名」三条（一条带两种曾听成）、「黑话」一条、「候选」空、「忽略」一条。用例把它拷进副本的 `_pipeline/词表/` 再跑，默认的 `vault/` 里没有它 | §5 词表、§4 L2 输入 |
 
 `raw/` 的键与 `_pairs/` 的文件名一致：`_pairs/EP91/L2-bridge.in.md` ↔ `raw/EP91/L2-bridge.raw.json`。
 L2 的单元是**章节**：一章一次调用，响应里是这一章的全部话题。假 runner 按这个键取响应，缺键即报错（不是静默跳过）。
